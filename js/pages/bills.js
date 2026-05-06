@@ -173,7 +173,11 @@ function summaryHTML(data) {
       pendingMonth += payment.pending_amount;
       pendingByWho[b.who] = (pendingByWho[b.who] || 0) + payment.pending_amount;
     }
-    if (status === 'paid' && payment?.paid_amount != null) {
+    // Use paid_date (not period status) to anchor to the viewed calendar month.
+    // Without this, an annual bill paid in January would appear in "Paid this month"
+    // for every subsequent month of the year since its period ('2026') stays 'paid'.
+    if (status === 'paid' && payment?.paid_amount != null &&
+        payment.paid_date?.slice(0, 7) === ui.month) {
       paidMonth += payment.paid_amount;
       paidByWho[b.who] = (paidByWho[b.who] || 0) + payment.paid_amount;
     }
