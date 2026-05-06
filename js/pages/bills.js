@@ -435,7 +435,7 @@ function tableHTML(data) {
       ${paymentCell}
       ${rewards}
       ${rotationCell(b)}
-      <td class="row-actions tight">
+      <td class="row-actions">
         <button class="del" data-del="${b.id}" title="Delete">✕</button>
         <button class="dots" data-bill-id="${b.id}" title="More">⋯</button>
       </td>
@@ -457,7 +457,7 @@ function tableHTML(data) {
             ${thSortable('pending', 'Payment', 'num center')}
             ${thSortable('rewards', 'Rewards', 'num center')}
             ${thSortable('lastused', 'Last used', 'center')}
-            <th style="width: 40px;"></th>
+            <th style="min-width: 78px;"></th>
           </tr>
         </thead>
         <tbody>${bodyRows}${tailDivider}</tbody>
