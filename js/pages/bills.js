@@ -45,8 +45,9 @@ const FREQ_LABELS = {
 // ---------- helpers ----------
 
 function periodForBill(bill, monthISO) {
-  const anchorDate = `${monthISO}-${String(bill.day || 1).padStart(2, '0')}`;
-  return periodFor(anchorDate, bill.frequency);
+  // Always use day 01 — bill.day can exceed the month length (e.g. day 31 in April)
+  // which causes JS date rollover and maps April → May period incorrectly.
+  return periodFor(`${monthISO}-01`, bill.frequency);
 }
 
 function monthLabel(ym) {

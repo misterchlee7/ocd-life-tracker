@@ -49,8 +49,7 @@ function render({ data, loading }) {
   const activeBills = data.bills.filter(b => !b.archived);
   let pendingMonth = 0;
   for (const b of activeBills) {
-    const anchor = `${month}-${String(b.day || 1).padStart(2, '0')}`;
-    const period = periodFor(anchor, b.frequency);
+    const period = periodFor(`${month}-01`, b.frequency);
     const p = paymentFor(data, b.id, period);
     if (p && p.pending_amount > 0 && p.status !== 'paid' && p.status !== 'skipped') {
       pendingMonth += p.pending_amount;
@@ -61,8 +60,7 @@ function render({ data, loading }) {
   const monthlySubs = activeSubs.reduce((a, s) => a + monthlyEquivalent(s), 0);
 
   const perksAvailable = data.perks.filter(p => !p.archived).reduce((acc, p) => {
-    const anchor = `${month}-${String(p.reset_day || 1).padStart(2, '0')}`;
-    const period = periodFor(anchor, p.frequency);
+    const period = periodFor(`${month}-01`, p.frequency);
     const claim = data.perk_claims.find(c => c.perk_id === p.id && c.period === period);
     const status = claim?.status || 'available';
     return status === 'available' ? acc + (p.value || 0) : acc;

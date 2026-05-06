@@ -33,8 +33,8 @@ const FREQ_LABELS = {
 // ---------- helpers ----------
 
 function periodForPerk(perk, monthISO) {
-  const anchorDate = `${monthISO}-${String(perk.reset_day || 1).padStart(2, '0')}`;
-  return periodFor(anchorDate, perk.frequency);
+  // Always use day 01 to avoid JS date rollover when reset_day exceeds month length.
+  return periodFor(`${monthISO}-01`, perk.frequency);
 }
 
 function monthLabel(ym) {
