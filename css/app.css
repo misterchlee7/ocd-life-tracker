@@ -347,7 +347,7 @@ th.sorted .sort-icon { color: var(--accent); }
 .rewards.zero { color: var(--text-faint); font-weight: 400; }
 
 /* ---------- row action menu ---------- */
-.row-actions { position: relative; text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+.row-actions { position: relative; text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 2px; padding-left: 20px; }
 .row-actions button.dots {
   background: none; border: 0; width: 24px; height: 24px; border-radius: 5px; cursor: pointer;
   color: var(--text-faint); font-size: 16px; line-height: 1;
