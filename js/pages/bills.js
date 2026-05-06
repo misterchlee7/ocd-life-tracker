@@ -161,17 +161,21 @@ function rewardsCardValueHTML(dollars, dollarCards, points, pointCards) {
 
 function summaryHTML(data) {
   const filtered = data.bills.filter(b => !b.archived);
-  let pendingMonth = 0, byWho = { chang: 0, kiju: 0, joint: 0 };
+  let pendingMonth = 0, pendingByWho = { chang: 0, kiju: 0, joint: 0 };
+  let paidMonth = 0, paidByWho = { chang: 0, kiju: 0, joint: 0 };
   let needsConfirmCount = 0, needsConfirmAmt = 0;
   let rewardsDollars = 0, rewardsDollarCards = 0;
   let rewardsPoints = 0, rewardsPointCards = 0;
-  let aprCount = 0, aprBill = null;
 
   for (const b of filtered) {
     const { status, payment } = statusForRow(data, b);
     if (payment && payment.pending_amount > 0 && status !== 'paid' && status !== 'skipped') {
       pendingMonth += payment.pending_amount;
-      byWho[b.who] = (byWho[b.who] || 0) + payment.pending_amount;
+      pendingByWho[b.who] = (pendingByWho[b.who] || 0) + payment.pending_amount;
+    }
+    if (status === 'paid' && payment?.paid_amount != null) {
+      paidMonth += payment.paid_amount;
+      paidByWho[b.who] = (paidByWho[b.who] || 0) + payment.paid_amount;
     }
     if (status === 'needs_confirm') {
       needsConfirmCount++;
@@ -182,24 +186,41 @@ function summaryHTML(data) {
       if ((b.cc?.rewards_unit || 'dollars') === 'points') { rewardsPoints += rb; rewardsPointCards++; }
       else { rewardsDollars += rb; rewardsDollarCards++; }
     }
-    const apr = b?.cc?.apr_zero;
-    if (apr && apr.months_left != null && apr.months_left <= (data.settings?.apr_warn_months ?? 2)) {
-      aprCount++;
-      if (!aprBill) aprBill = b;
-    }
   }
 
-  const whoSub = [['chang', 'Chang'], ['kiju', 'Kiju'], ['joint', 'Joint']]
-    .filter(([k]) => byWho[k] > 0)
-    .map(([k, l]) => `${l} ${fmtMoneyShort(byWho[k])}`)
+  const pendingWhoSub = [['chang', 'Chang'], ['kiju', 'Kiju'], ['joint', 'Joint']]
+    .filter(([k]) => pendingByWho[k] > 0)
+    .map(([k, l]) => `${l} ${fmtMoneyShort(pendingByWho[k])}`)
     .join(' · ');
+
+  const paidWhoSub = [['chang', 'Chang'], ['kiju', 'Kiju'], ['joint', 'Joint']]
+    .filter(([k]) => paidByWho[k] > 0)
+    .map(([k, l]) => `${l} ${fmtMoneyShort(paidByWho[k])}`)
+    .join(' · ');
+
+  // Show how paid compares to pending — positive diff = paid more than scheduled (e.g. extra mortgage payment)
+  const diff = paidMonth - pendingMonth;
+  const diffSign = diff >= 0 ? '+' : '−';
+  const diffAbs = Math.abs(diff);
+  const paidSub = paidMonth > 0
+    ? (paidWhoSub ? `${paidWhoSub}` : '&nbsp;')
+    : 'nothing paid yet';
+  const paidVsPending = paidMonth > 0 && pendingMonth > 0
+    ? `<div class="sub" style="margin-top:2px;font-size:11px;opacity:0.75">${diffSign}${fmtMoneyShort(diffAbs)} vs pending</div>`
+    : '';
 
   return `
     <div class="summary">
       <div class="card">
         <div class="label">Pending this month</div>
         <div class="value">${fmtMoney(pendingMonth)}</div>
-        <div class="sub">${whoSub || '&nbsp;'}</div>
+        <div class="sub">${pendingWhoSub || '&nbsp;'}</div>
+      </div>
+      <div class="card">
+        <div class="label">Paid this month</div>
+        <div class="value">${fmtMoney(paidMonth)}</div>
+        <div class="sub">${paidSub}</div>
+        ${paidVsPending}
       </div>
       <div class="card">
         <div class="label">Needs confirmation</div>
@@ -209,11 +230,6 @@ function summaryHTML(data) {
       <div class="card">
         <div class="label">CC rewards available</div>
         ${rewardsCardValueHTML(rewardsDollars, rewardsDollarCards, rewardsPoints, rewardsPointCards)}
-      </div>
-      <div class="card">
-        <div class="label">0% APR alerts</div>
-        <div class="value ${aprCount ? 'warn' : ''}">${aprCount} ${aprCount === 1 ? 'card' : 'cards'}</div>
-        <div class="sub">${aprBill ? `${aprBill.brand} ${aprBill.name} — ${aprBill.cc.apr_zero.months_left}mo left` : '—'}</div>
       </div>
     </div>
   `;
