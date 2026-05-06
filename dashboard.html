@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OCD Life Tracker — Dashboard</title>
+<link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>OCD Life Tracker</div>
+  <div class="top-actions">
+    <button class="icon-btn" id="btn-undo" title="Undo (⌘Z)" disabled>↶</button>
+    <span style="width:4px"></span>
+    <button class="btn" id="btn-refresh" title="Re-pull data.json from GitHub">↻ Refresh</button>
+    <button class="btn" id="btn-settings" title="Connection settings">⚙</button>
+    <button class="btn primary" id="btn-save" disabled>Saved</button>
+  </div>
+</div>
+
+<nav class="tabs">
+  <a href="dashboard.html" class="active">Dashboard</a>
+  <a href="bills.html">Bills</a>
+  <a href="perks.html">Perks</a>
+  <a href="subscriptions.html">Subscriptions</a>
+  <a href="vesting.html">Vesting</a>
+  <a href="backlog.html">Backlog</a>
+  <a href="warranties.html">Warranties</a>
+</nav>
+
+<div class="page" id="page"></div>
+
+<script type="module" src="js/pages/dashboard.js"></script>
+</body>
+</html>
