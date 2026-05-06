@@ -263,12 +263,14 @@ function thSortable(key, label, extra = '') {
 
 function statusPill(status, payment, bill) {
   let label = STATUS_LABELS[status] || status;
-  // show paid date if in a prior period
+  // show paid month only when the payment was recorded 2+ months away from the viewed month
+  // (suppresses "Paid · May" for April bills legitimately logged a few days late)
   if (status === 'paid' && payment?.paid_date) {
     const pd = payment.paid_date;
-    const monthNow = ui.month;
-    const payMonth = pd.slice(0, 7);
-    if (payMonth !== monthNow) {
+    const [vy, vm] = ui.month.split('-').map(Number);
+    const [py, pm] = pd.slice(0, 7).split('-').map(Number);
+    const monthDiff = Math.abs((py - vy) * 12 + (pm - vm));
+    if (monthDiff >= 2) {
       const m = new Date(pd + 'T00:00:00').toLocaleDateString('en-US', { month: 'short' });
       label = `Paid · ${m}`;
     }
