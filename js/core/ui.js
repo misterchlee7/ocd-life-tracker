@@ -300,7 +300,10 @@ export function openSettingsModal(opts = {}) {
     persistInputs();
     el.remove();
     if (state.get().guest) {
-      // Coming from demo mode: wipe demo data + cache, then fetch real prod data
+      // Coming from demo mode: restore real display names, wipe demo data + cache,
+      // then fetch real prod data
+      WHO_LABEL.chang = 'Chang';
+      WHO_LABEL.kiju  = 'Kiju';
       await state.exitGuestMode();
     } else {
       await state.refresh();
@@ -364,7 +367,10 @@ function showLandingScreen() {
 
   el.querySelector('#l-demo').addEventListener('click', () => {
     el.remove();
-    import('./demo-data.js').then(({ getDemoData }) => {
+    import('./demo-data.js').then(({ getDemoData, DEMO_WHO_NAMES }) => {
+      // Swap display names so real names never appear in demo mode
+      WHO_LABEL.chang = DEMO_WHO_NAMES[0];
+      WHO_LABEL.kiju  = DEMO_WHO_NAMES[1];
       state.enterGuestMode(getDemoData());
     });
   });

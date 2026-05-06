@@ -3,6 +3,18 @@
 
 import { todayISO } from './dates.js';
 
+// Two random display names picked fresh each time the module is imported,
+// so every demo session shows different names instead of the real ones.
+const NAME_POOL = ['Alex', 'Jordan', 'Sam', 'Casey', 'Riley', 'Morgan', 'Drew', 'Quinn'];
+function pickTwo() {
+  const pool = [...NAME_POOL];
+  const i1 = Math.floor(Math.random() * pool.length);
+  const [n1] = pool.splice(i1, 1);
+  const n2 = pool[Math.floor(Math.random() * pool.length)];
+  return [n1, n2];
+}
+export const DEMO_WHO_NAMES = pickTwo(); // [person1, person2]
+
 function addDays(iso, n) {
   const d = new Date(iso + 'T00:00:00');
   d.setDate(d.getDate() + n);
