@@ -156,6 +156,12 @@ th.num { text-align: right; }
 td.center, th.center { text-align: center; }
 td.num.center { text-align: center; }
 th[data-sort="amount"] { min-width: 140px; }
+/* Compact columns — shrink to content, let Bill + Amount absorb extra width */
+td.tight { width: 1%; white-space: nowrap; }
+/* Paid amount in table — green to distinguish from pending */
+td.paid-amt { color: var(--s-paid-fg); font-weight: 600; }
+/* Type pill shown inline inside the Bill name cell */
+.pill.bill-type-inline { font-size: 10px; padding: 1px 5px; margin-left: 3px; vertical-align: 1px; opacity: 0.85; }
 td.muted { color: var(--text-muted); }
 th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { color: var(--text); background: #f3f3f5; }
@@ -239,6 +245,7 @@ th.sorted .sort-icon { color: var(--accent); }
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
   margin-bottom: 14px;
 }
+.summary.summary-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .summary .card { padding: 10px 14px; }
 .summary .label {
   font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em;

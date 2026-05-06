@@ -166,6 +166,7 @@ function summaryHTML(data) {
   let needsConfirmCount = 0, needsConfirmAmt = 0;
   let rewardsDollars = 0, rewardsDollarCards = 0;
   let rewardsPoints = 0, rewardsPointCards = 0;
+  const typeCounts = {};
 
   for (const b of filtered) {
     const { status, payment } = statusForRow(data, b);
@@ -190,6 +191,9 @@ function summaryHTML(data) {
       if ((b.cc?.rewards_unit || 'dollars') === 'points') { rewardsPoints += rb; rewardsPointCards++; }
       else { rewardsDollars += rb; rewardsDollarCards++; }
     }
+    // type breakdown
+    const t = b.type || 'other';
+    typeCounts[t] = (typeCounts[t] || 0) + 1;
   }
 
   const pendingWhoSub = [['chang', 'Chang'], ['kiju', 'Kiju'], ['joint', 'Joint']]
@@ -213,8 +217,15 @@ function summaryHTML(data) {
     ? `<div class="sub" style="margin-top:2px;font-size:11px;opacity:0.75">${diffSign}${fmtMoneyShort(diffAbs)} vs pending</div>`
     : '';
 
+  // Type breakdown — show counts for each type present, ordered by BILL_TYPES
+  const typeBreakdown = BILL_TYPES
+    .filter(t => typeCounts[t] > 0)
+    .map(t => `${typeCounts[t]} ${BILL_TYPE_LABELS[t]}`)
+    .join(' · ');
+  const totalBills = filtered.length;
+
   return `
-    <div class="summary">
+    <div class="summary summary-5">
       <div class="card">
         <div class="label">Pending this month</div>
         <div class="value">${fmtMoney(pendingMonth)}</div>
@@ -234,6 +245,11 @@ function summaryHTML(data) {
       <div class="card">
         <div class="label">CC rewards available</div>
         ${rewardsCardValueHTML(rewardsDollars, rewardsDollarCards, rewardsPoints, rewardsPointCards)}
+      </div>
+      <div class="card">
+        <div class="label">Bill breakdown</div>
+        <div class="value">${totalBills}</div>
+        <div class="sub">${typeBreakdown || '&nbsp;'}</div>
       </div>
     </div>
   `;
@@ -329,12 +345,12 @@ function yearProgressFromBill(bill, year) {
 }
 
 function rotationCell(bill) {
-  if (!bill.cc?.last_used) return `<td class="center muted" data-sort="">—</td>`;
+  if (!bill.cc?.last_used) return `<td class="center muted tight" data-sort="">—</td>`;
   const r = rotation(bill, state.get().data?.settings?.rotation_target_months ?? 6);
-  if (!r) return `<td class="center muted" data-sort="">—</td>`;
+  if (!r) return `<td class="center muted tight" data-sort="">—</td>`;
   const dateSortKey = bill.cc.last_used.replace(/-/g, '');
   const lvlLabel = r.level === 'fresh' ? 'Fresh' : r.level === 'warn' ? 'Warn' : 'Stale';
-  return `<td class="center" data-sort="${dateSortKey}">
+  return `<td class="center tight" data-sort="${dateSortKey}">
     <div class="rot-badge rot-${r.level}">${lvlLabel}</div>
     <div class="rot-sub">${shortDate(bill.cc.last_used)} · ${r.monthsAgo}mo</div>
   </td>`;
@@ -380,7 +396,7 @@ function tableHTML(data) {
   const dividerRow = () => {
     const d = new Date(today + 'T00:00:00');
     const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    return `<tr class="today-divider"><td colspan="11"><span class="today-label">Today · ${label}</span></td></tr>`;
+    return `<tr class="today-divider"><td colspan="10"><span class="today-label">Today · ${label}</span></td></tr>`;
   };
 
   const bodyRows = rows.map(b => {
@@ -390,28 +406,35 @@ function tableHTML(data) {
       dividerInserted = true;
     }
     const { status, payment } = statusForRow(data, b);
-    const pending = payment?.pending_amount != null
-      ? `<td class="num center" data-sort="${payment.pending_amount}">${fmtMoney(payment.pending_amount)}</td>`
-      : `<td class="num center muted" data-sort="-1">—</td>`;
+    // Payment cell: shows paid_amount (green) when paid, pending_amount otherwise
+    const paymentCell = (() => {
+      if (status === 'paid' && payment?.paid_amount != null) {
+        return `<td class="num center tight paid-amt" data-sort="${payment.paid_amount}">${fmtMoney(payment.paid_amount)}</td>`;
+      }
+      if (payment?.pending_amount != null) {
+        return `<td class="num center tight" data-sort="${payment.pending_amount}">${fmtMoney(payment.pending_amount)}</td>`;
+      }
+      return `<td class="num center tight muted" data-sort="-1">—</td>`;
+    })();
     const rewardsEditable = b.type === 'cc' || !!b.cc;
     const rewardsFmt = fmtRewards(b);
     const rewards = rewardsFmt
-      ? `<td class="num center rewards${rewardsEditable ? ' editable-cell' : ''}" data-rewards-bill-id="${b.id}" data-sort="${b.cc.rewards_balance}">${rewardsFmt}</td>`
-      : `<td class="num center rewards zero${rewardsEditable ? ' editable-cell' : ''}" data-rewards-bill-id="${b.id}" data-sort="0">—</td>`;
-    const notes = `<td class="note-cell center" data-note-bill-id="${b.id}" title="${escapeAttr(b.notes || '')}">${b.notes ? escape(b.notes.slice(0, 30)) + (b.notes.length > 30 ? '…' : '') : '<span class="muted">—</span>'}</td>`;
+      ? `<td class="num center tight rewards${rewardsEditable ? ' editable-cell' : ''}" data-rewards-bill-id="${b.id}" data-sort="${b.cc.rewards_balance}">${rewardsFmt}</td>`
+      : `<td class="num center tight rewards zero${rewardsEditable ? ' editable-cell' : ''}" data-rewards-bill-id="${b.id}" data-sort="0">—</td>`;
+    const notes = `<td class="note-cell center tight" data-note-bill-id="${b.id}" title="${escapeAttr(b.notes || '')}">${b.notes ? escape(b.notes.slice(0, 30)) + (b.notes.length > 30 ? '…' : '') : '<span class="muted">—</span>'}</td>`;
+    const typePill = b.type ? `<span class="pill type tiny bill-type-inline">${BILL_TYPE_LABELS[b.type] || b.type}</span>` : '';
 
     return `${prefix}<tr data-bill-id="${b.id}">
-      <td data-sort="${b.day ?? 99}"><span class="day">${b.day ?? '—'}</span></td>
-      <td data-sort="${escapeAttr(b.brand + ' ' + b.name)}"><b>${escape(b.brand)}</b> — ${escape(b.name)}${aprBadge(b)}${dueBadge(b)}</td>
-      <td data-sort="${b.who || ''}">${whoPill(b.who)}</td>
-      <td data-sort="${b.type || ''}"><span class="pill type">${BILL_TYPE_LABELS[b.type] || b.type || '—'}</span></td>
+      <td class="tight" data-sort="${b.day ?? 99}"><span class="day">${b.day ?? '—'}</span></td>
+      <td data-sort="${escapeAttr(b.brand + ' ' + b.name)}"><b>${escape(b.brand)}</b> — ${escape(b.name)} ${typePill}${aprBadge(b)}${dueBadge(b)}</td>
+      <td class="tight" data-sort="${b.who || ''}">${whoPill(b.who)}</td>
       ${amountCell(b, year)}
-      <td data-sort="${status}">${statusPill(status, payment, b)}</td>
-      ${pending}
+      <td class="tight" data-sort="${status}">${statusPill(status, payment, b)}</td>
+      ${paymentCell}
       ${rewards}
       ${rotationCell(b)}
       ${notes}
-      <td class="row-actions">
+      <td class="row-actions tight">
         <button class="del" data-del="${b.id}" title="Delete">✕</button>
         <button class="dots" data-bill-id="${b.id}" title="More">⋯</button>
       </td>
@@ -428,10 +451,9 @@ function tableHTML(data) {
             ${thSortable('day', 'Day', '')}
             ${thSortable('name', 'Bill')}
             ${thSortable('who', 'Who')}
-            ${thSortable('type', 'Type')}
             ${thSortable('amount', 'Amount', 'num')}
             ${thSortable('status', 'This month')}
-            ${thSortable('pending', 'Pending', 'num center')}
+            ${thSortable('pending', 'Payment', 'num center')}
             ${thSortable('rewards', 'Rewards', 'num center')}
             ${thSortable('lastused', 'Last used', 'center')}
             <th class="center">Notes</th>
