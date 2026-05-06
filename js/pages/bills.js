@@ -396,7 +396,7 @@ function tableHTML(data) {
   const dividerRow = () => {
     const d = new Date(today + 'T00:00:00');
     const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    return `<tr class="today-divider"><td colspan="10"><span class="today-label">Today · ${label}</span></td></tr>`;
+    return `<tr class="today-divider"><td colspan="9"><span class="today-label">Today · ${label}</span></td></tr>`;
   };
 
   const bodyRows = rows.map(b => {
@@ -421,19 +421,20 @@ function tableHTML(data) {
     const rewards = rewardsFmt
       ? `<td class="num center tight rewards${rewardsEditable ? ' editable-cell' : ''}" data-rewards-bill-id="${b.id}" data-sort="${b.cc.rewards_balance}">${rewardsFmt}</td>`
       : `<td class="num center tight rewards zero${rewardsEditable ? ' editable-cell' : ''}" data-rewards-bill-id="${b.id}" data-sort="0">—</td>`;
-    const notes = `<td class="note-cell center tight" data-note-bill-id="${b.id}" title="${escapeAttr(b.notes || '')}">${b.notes ? escape(b.notes.slice(0, 30)) + (b.notes.length > 30 ? '…' : '') : '<span class="muted">—</span>'}</td>`;
     const typePill = b.type ? `<span class="pill type tiny bill-type-inline">${BILL_TYPE_LABELS[b.type] || b.type}</span>` : '';
+    const noteLine = b.notes
+      ? `<div class="bill-note" data-note-bill-id="${b.id}" title="${escapeAttr(b.notes)}">${escape(b.notes)}</div>`
+      : `<div class="bill-note" data-note-bill-id="${b.id}"></div>`;
 
     return `${prefix}<tr data-bill-id="${b.id}">
       <td class="tight" data-sort="${b.day ?? 99}"><span class="day">${b.day ?? '—'}</span></td>
-      <td data-sort="${escapeAttr(b.brand + ' ' + b.name)}"><b>${escape(b.brand)}</b> — ${escape(b.name)} ${typePill}${aprBadge(b)}${dueBadge(b)}</td>
+      <td data-sort="${escapeAttr(b.brand + ' ' + b.name)}"><b>${escape(b.brand)}</b> — ${escape(b.name)} ${typePill}${aprBadge(b)}${dueBadge(b)}${noteLine}</td>
       <td class="tight" data-sort="${b.who || ''}">${whoPill(b.who)}</td>
       ${amountCell(b, year)}
       <td class="tight" data-sort="${status}">${statusPill(status, payment, b)}</td>
       ${paymentCell}
       ${rewards}
       ${rotationCell(b)}
-      ${notes}
       <td class="row-actions tight">
         <button class="del" data-del="${b.id}" title="Delete">✕</button>
         <button class="dots" data-bill-id="${b.id}" title="More">⋯</button>
@@ -456,7 +457,6 @@ function tableHTML(data) {
             ${thSortable('pending', 'Payment', 'num center')}
             ${thSortable('rewards', 'Rewards', 'num center')}
             ${thSortable('lastused', 'Last used', 'center')}
-            <th class="center">Notes</th>
             <th style="width: 40px;"></th>
           </tr>
         </thead>
@@ -594,11 +594,12 @@ function wireInteractions(data) {
     btn.addEventListener('click', () => confirmPayment(btn.dataset.confirmPaymentId));
   });
 
-  // inline note edit
-  document.querySelectorAll('td.note-cell').forEach(td => {
-    td.addEventListener('click', () => {
-      if (td.querySelector('input')) return; // already editing
-      const billId = td.dataset.noteBillId;
+  // inline note edit — div.bill-note is inside the Bill td cell
+  document.querySelectorAll('div.bill-note[data-note-bill-id]').forEach(div => {
+    div.addEventListener('click', (e) => {
+      e.stopPropagation(); // don't bubble to row click handlers
+      if (div.querySelector('input')) return; // already editing
+      const billId = div.dataset.noteBillId;
       const bill = state.get().data?.bills.find(b => b.id === billId);
       if (!bill) return;
       const input = document.createElement('input');
@@ -606,8 +607,8 @@ function wireInteractions(data) {
       input.value = bill.notes || '';
       input.className = 'note-input';
       input.placeholder = 'Add a note…';
-      td.innerHTML = '';
-      td.appendChild(input);
+      div.innerHTML = '';
+      div.appendChild(input);
       input.focus();
       input.select();
       const commit = () => {

@@ -454,6 +454,14 @@ td.status-cell { cursor: pointer; }
 td.status-cell:hover { background: #f3f3f5; }
 .inline-select { font-size: 12px; border: 1px solid var(--border-strong); border-radius: 4px; padding: 2px 4px; background: #fff; cursor: pointer; }
 td.note-cell { cursor: text; color: var(--text-muted); max-width: 200px; }
+/* Notes moved inline under bill name — never wider than the bill name line */
+div.bill-note {
+  font-size: 11.5px; color: var(--text-muted); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  cursor: text;
+}
+div.bill-note:empty { display: none; }
+div.bill-note input.note-input { width: 100%; font-size: 11.5px; }
 td.editable-cell { cursor: text; }
 td.note-cell:hover, td.editable-cell:hover { color: var(--text); background: #f3f3f5; }
 td.note-cell input.note-input, td.editable-cell input.note-input {
