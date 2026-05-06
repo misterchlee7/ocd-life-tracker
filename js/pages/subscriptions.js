@@ -1,5 +1,5 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL } from '../core/ui.js';
+import { bootstrap, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
 
 const page = document.getElementById('page');
@@ -451,15 +451,16 @@ function wireInteractions() {
   });
 
   if (ui.openMenuId) {
-    document.addEventListener('click', () => { ui.openMenuId = null; render(state.get()); }, { once: true });
-  }
+    const openMenu = page.querySelector('.menu');
+    const anchorBtn = page.querySelector(`[data-menu="${ui.openMenuId}"]`);
+    if (openMenu && anchorBtn) positionMenu(openMenu, anchorBtn);
 
-  // Flip any open menu that would overflow the viewport bottom
-  page.querySelectorAll('.menu').forEach(menu => {
-    if (menu.getBoundingClientRect().bottom > window.innerHeight - 8) {
-      menu.classList.add('menu-up');
-    }
-  });
+    document.addEventListener('click', () => {
+      document.querySelectorAll('body > .menu').forEach(m => m.remove());
+      ui.openMenuId = null;
+      render(state.get());
+    }, { once: true });
+  }
 
   // Inline status editing
   page.querySelectorAll('td.status-cell[data-status-sub-id]').forEach(td => {

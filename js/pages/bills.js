@@ -1,5 +1,5 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL } from '../core/ui.js';
+import { bootstrap, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu } from '../core/ui.js';
 import { periodFor, todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
 import { paymentFor, yearProgress, rotation, needsConfirm } from '../core/derive.js';
 
@@ -685,13 +685,14 @@ function toggleRowMenu(billId, anchor) {
   const { data } = state.get();
   const bill = data.bills.find(b => b.id === billId);
   if (!bill) return;
-  const { payment } = statusForRow(data, bill);
+  const { status, payment } = statusForRow(data, bill);
   const menu = document.createElement('div');
   menu.className = 'menu';
   menu.innerHTML = `
     <div class="menu-item" data-act="edit"><div class="title">✏️ Edit bill</div></div>
     <div class="menu-item" data-act="pending"><div class="title">💵 Set pending amount…</div><div class="desc">Scheduled for ${monthLabel(ui.month)}</div></div>
     <div class="menu-item" data-act="skip-payment"><div class="title">🚫 No payment this month</div><div class="desc">$0 — nothing due, marks as skipped</div></div>
+    ${status === 'paid' ? `<div class="menu-item" data-act="edit-paid-amount"><div class="title">✏️ Edit paid amount</div><div class="desc">Correct the amount without resetting paid date</div></div>` : ''}
     ${payment ? `<div class="menu-item" data-act="mark-paid"><div class="title">✅ Mark paid</div></div>` : ''}
     <div class="menu-sep"></div>
     ${bill.cc ? `<div class="menu-item" data-act="mark-used"><div class="title">🔁 Mark card used today</div><div class="desc">Updates rotation tracker</div></div><div class="menu-sep"></div>` : ''}
@@ -699,10 +700,7 @@ function toggleRowMenu(billId, anchor) {
     <div class="menu-item danger" data-act="delete"><div class="title">🗑️ Delete bill</div><div class="desc">Permanently removes the bill and its payments</div></div>
     ${payment ? `<div class="menu-item danger" data-act="delete-payment"><div class="title">❌ Clear ${monthLabel(ui.month)} payment record</div></div>` : ''}
   `;
-  anchor.parentElement.appendChild(menu);
-  if (menu.getBoundingClientRect().bottom > window.innerHeight - 8) {
-    menu.classList.add('menu-up');
-  }
+  positionMenu(menu, anchor); // appends to body with position:fixed — no overflow clipping
 
   menu.querySelectorAll('.menu-item').forEach(item => {
     item.addEventListener('click', () => {
@@ -729,6 +727,24 @@ function handleMenuAction(billId, act) {
     case 'pending': promptPendingAmount(bill, period); break;
     case 'skip-payment': skipPayment(bill, period); break;
     case 'mark-paid': markPaid(bill, period); break;
+    case 'edit-paid-amount': {
+      const existing = paymentFor(data, bill.id, period);
+      if (!existing) return;
+      amountModal({
+        title: 'Edit paid amount',
+        sub: `${bill.brand} — ${bill.name} · only the amount changes, paid date is preserved`,
+        defaultValue: existing.paid_amount ?? existing.pending_amount ?? bill.amount ?? 0,
+        confirmLabel: 'Update amount',
+        onConfirm: (amt) => {
+          state.mutate(d => {
+            const p = d.payments.find(x => x.bill_id === bill.id && x.period === period);
+            if (p) p.paid_amount = amt;
+          }, `edit paid amount ${bill.brand} — ${bill.name}`);
+          toast(`Updated: ${bill.brand} — ${bill.name}`, 'success');
+        },
+      });
+      break;
+    }
     case 'mark-used':
       state.mutate(d => {
         const b = d.bills.find(x => x.id === bill.id);

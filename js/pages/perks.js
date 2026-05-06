@@ -1,5 +1,5 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL } from '../core/ui.js';
+import { bootstrap, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu } from '../core/ui.js';
 import { periodFor, todayISO, shortDate } from '../core/dates.js';
 import { claimsFor } from '../core/derive.js';
 
@@ -419,15 +419,18 @@ function wireInteractions(data) {
   });
 
   if (ui.openMenuId) {
-    document.addEventListener('click', () => { ui.openMenuId = null; render(state.get()); }, { once: true });
-  }
+    // Move menu to document.body with position:fixed so it is never clipped by
+    // overflow:auto/hidden on a parent container (e.g. the scrollable table).
+    const openMenu = page.querySelector('.menu');
+    const anchorBtn = page.querySelector(`[data-menu="${ui.openMenuId}"]`);
+    if (openMenu && anchorBtn) positionMenu(openMenu, anchorBtn);
 
-  // Flip any open menu that would overflow the viewport bottom
-  page.querySelectorAll('.menu').forEach(menu => {
-    if (menu.getBoundingClientRect().bottom > window.innerHeight - 8) {
-      menu.classList.add('menu-up');
-    }
-  });
+    document.addEventListener('click', () => {
+      document.querySelectorAll('body > .menu').forEach(m => m.remove());
+      ui.openMenuId = null;
+      render(state.get());
+    }, { once: true });
+  }
 
   // Inline note editing
   page.querySelectorAll('td.note-cell[data-note-perk-id]').forEach(td => {

@@ -386,3 +386,27 @@ export function whoPill(who) {
   const label = WHO_LABEL[who] || who || '';
   return `<span class="pill ${cls}">${label}</span>`;
 }
+
+// ---------- Menu positioning ----------
+
+// Appends a .menu element to document.body with position:fixed so it is never
+// clipped by overflow:auto/hidden on a parent container (e.g. scrollable tables).
+// Right-aligns the menu with the anchor button; opens downward if room, else upward.
+export function positionMenu(menu, anchor) {
+  document.body.appendChild(menu);
+  const rect = anchor.getBoundingClientRect();
+  menu.style.position = 'fixed';
+  menu.style.zIndex   = '1000';
+  menu.style.left     = 'auto';
+  menu.style.right    = `${window.innerWidth - rect.right}px`;
+  // Measure height after append — works because fixed elements render outside overflow containers
+  const menuH     = menu.offsetHeight;
+  const spaceBelow = window.innerHeight - rect.bottom - 4;
+  if (spaceBelow >= menuH || rect.top < menuH + 4) {
+    menu.style.top    = `${rect.bottom + 4}px`;
+    menu.style.bottom = 'auto';
+  } else {
+    menu.style.top    = 'auto';
+    menu.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+  }
+}
