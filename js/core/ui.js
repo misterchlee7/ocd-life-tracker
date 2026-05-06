@@ -116,15 +116,20 @@ export function initTopbar() {
   initTabDrag();
 
   // hook up Save / Refresh / Settings / Undo buttons, if present
-  document.getElementById('btn-save')?.addEventListener('click', onSave);
+  document.getElementById('btn-save')?.addEventListener('click', () => {
+    // In guest mode the save button becomes a login prompt — never call onSave
+    if (state.get().guest) openSettingsModal();
+    else onSave();
+  });
   document.getElementById('btn-refresh')?.addEventListener('click', onRefresh);
   document.getElementById('btn-settings')?.addEventListener('click', () => openSettingsModal());
   document.getElementById('btn-undo')?.addEventListener('click', onUndo);
 
-  // intercept tab navigation when dirty
+  // intercept tab navigation when dirty (skip entirely in guest mode — nothing to save)
   document.querySelectorAll('nav.tabs a').forEach(link => {
     link.addEventListener('click', (e) => {
-      if (!state.get().dirty) return; // clean — navigate freely
+      const s = state.get();
+      if (!s.dirty || s.guest) return; // clean or demo — navigate freely
       const href = link.getAttribute('href');
       if (!href || link.classList.contains('active')) return; // same page
       e.preventDefault();
@@ -132,18 +137,47 @@ export function initTopbar() {
     });
   });
 
-  // render dirty/loading indicator
-  state.subscribe(({ dirty, loading, error }) => {
+  // render dirty/loading indicator + demo banner
+  state.subscribe(({ dirty, loading, error, guest }) => {
     const saveBtn = document.getElementById('btn-save');
     if (saveBtn) {
-      saveBtn.disabled = !dirty || loading;
-      saveBtn.textContent = loading ? 'Saving…' : dirty ? 'Save*' : 'Saved';
+      if (guest) {
+        // Guest mode: repurpose Save as a login CTA, always enabled
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Login to save';
+      } else {
+        saveBtn.disabled = !dirty || loading;
+        saveBtn.textContent = loading ? 'Saving…' : dirty ? 'Save*' : 'Saved';
+      }
     }
     const undoBtn = document.getElementById('btn-undo');
     if (undoBtn) undoBtn.disabled = !state.canUndo();
 
+    updateDemoBanner(guest);
+
     if (error) toast(error, 'error');
   });
+}
+
+function updateDemoBanner(guest) {
+  const existing = document.getElementById('demo-banner');
+  if (guest) {
+    if (existing) return; // already showing
+    const banner = document.createElement('div');
+    banner.id = 'demo-banner';
+    banner.className = 'demo-banner';
+    banner.innerHTML = `
+      <span>🎭 Demo mode — changes are not saved</span>
+      <button class="btn demo-login-btn" id="demo-login-btn">Login to save your data</button>
+    `;
+    // Insert right after the nav tabs so it sits below the topbar
+    const nav = document.querySelector('nav.tabs');
+    if (nav) nav.insertAdjacentElement('afterend', banner);
+    else document.body.prepend(banner);
+    document.getElementById('demo-login-btn').addEventListener('click', () => openSettingsModal());
+  } else {
+    existing?.remove();
+  }
 }
 
 function openNavGuard(href) {
@@ -265,7 +299,12 @@ export function openSettingsModal(opts = {}) {
   el.querySelector('#s-save').onclick = async () => {
     persistInputs();
     el.remove();
-    await state.refresh();
+    if (state.get().guest) {
+      // Coming from demo mode: wipe demo data + cache, then fetch real prod data
+      await state.exitGuestMode();
+    } else {
+      await state.refresh();
+    }
   };
   el.addEventListener('click', (e) => { if (e.target === el && !opts.forceOpen) el.remove(); });
 
@@ -290,16 +329,45 @@ function escapeAttr(s) {
 
 // ---------- Credential gate ----------
 
-// Called by each page. If creds are missing, opens the settings modal and
-// returns false. Otherwise initializes state.
+// Called by each page. If creds are missing, shows the landing screen
+// (Login vs Demo choice). Otherwise initializes state from GitHub.
 export async function bootstrap() {
   initTopbar();
   if (!hasCreds()) {
-    openSettingsModal({ forceOpen: true });
+    showLandingScreen();
     return false;
   }
   await state.init();
   return true;
+}
+
+function showLandingScreen() {
+  const el = document.createElement('div');
+  el.id = 'landing-screen';
+  el.className = 'modal-backdrop';
+  el.innerHTML = `
+    <div class="modal landing-modal">
+      <h2>OCD Life Tracker</h2>
+      <p class="modal-sub">Personal finance &amp; life tracker.<br>Connect your GitHub data repo, or explore with sample data.</p>
+      <div class="landing-actions">
+        <button class="btn primary" id="l-login">Login with GitHub</button>
+        <button class="btn" id="l-demo">Try Demo</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(el);
+
+  el.querySelector('#l-login').addEventListener('click', () => {
+    el.remove();
+    openSettingsModal({ forceOpen: true });
+  });
+
+  el.querySelector('#l-demo').addEventListener('click', () => {
+    el.remove();
+    import('./demo-data.js').then(({ getDemoData }) => {
+      state.enterGuestMode(getDemoData());
+    });
+  });
 }
 
 // ---------- Common small bits ----------

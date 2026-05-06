@@ -623,3 +623,33 @@ tr.warranty-warn   { background: #fef9f0; }
 .badge-urgent  { background: #fdd;    color: #b83c30; }
 .badge-warn    { background: #fef0ef; color: #b83c30; border: 1px solid #f5c5c0; }
 .badge-soon    { background: #fef6e0; color: #a4670c; border: 1px solid #f0dfa0; }
+
+/* ---------- demo banner ---------- */
+.demo-banner {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  background: #7c3aed; color: #fff;
+  font-size: 13px; font-weight: 600;
+  padding: 7px 16px;
+}
+.demo-banner .demo-login-btn {
+  font-size: 12px; padding: 3px 11px;
+  background: rgba(255,255,255,0.15); color: #fff;
+  border-color: rgba(255,255,255,0.35);
+}
+.demo-banner .demo-login-btn:hover {
+  background: rgba(255,255,255,0.25);
+}
+
+/* ---------- landing screen ---------- */
+.landing-modal {
+  width: min(380px, 92vw);
+  text-align: center;
+}
+.landing-modal h2 { font-size: 1.3rem; margin-bottom: 6px; }
+.landing-modal .modal-sub { margin-bottom: 22px; }
+.landing-actions {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.landing-actions .btn {
+  font-size: 14px; padding: 10px 16px;
+}

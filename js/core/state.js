@@ -13,6 +13,7 @@ let _sha = null;
 let _dirty = false;
 let _loading = false;
 let _error = null;
+let _guest = false; // true while in demo/guest mode
 
 function notify() {
   for (const fn of listeners) {
@@ -21,10 +22,11 @@ function notify() {
 }
 
 function snapshot() {
-  return { data: _data, sha: _sha, dirty: _dirty, loading: _loading, error: _error };
+  return { data: _data, sha: _sha, dirty: _dirty, loading: _loading, error: _error, guest: _guest };
 }
 
 function cacheWrite() {
+  if (_guest) return; // NEVER write demo data to localStorage
   try {
     localStorage.setItem(STORAGE_KEYS.cache, JSON.stringify(_data));
     if (_sha) localStorage.setItem(STORAGE_KEYS.sha, _sha);
@@ -95,8 +97,10 @@ export const state = {
     if (undoStack.length > MAX_UNDO) undoStack.shift();
     fn(_data);
     _data.updated_at = new Date().toISOString();
-    _dirty = true;
-    cacheWrite();
+    if (!_guest) {
+      _dirty = true;
+      cacheWrite(); // cacheWrite also guards on _guest, but belt-and-suspenders
+    }
     notify();
   },
 
@@ -112,7 +116,39 @@ export const state = {
 
   canUndo() { return undoStack.length > 0; },
 
+  // Load hardcoded demo data into memory. Nothing is written to localStorage or GitHub.
+  enterGuestMode(data) {
+    _guest = true;
+    _data = structuredClone(data); // defensive clone so demo-data.js object stays pristine
+    _sha = null;
+    _dirty = false;
+    _loading = false;
+    _error = null;
+    undoStack.length = 0;
+    // intentionally no cacheWrite — demo data must never touch localStorage
+    notify();
+  },
+
+  // Called when the user logs in from guest mode. Wipes everything and fetches real data.
+  async exitGuestMode() {
+    _guest = false;
+    _data = null;
+    _sha = null;
+    _dirty = false;
+    _loading = false;
+    _error = null;
+    undoStack.length = 0;
+    // Explicitly purge the localStorage cache so there is zero chance of demo
+    // data or stale prod data being shown after login.
+    try {
+      localStorage.removeItem(STORAGE_KEYS.cache);
+      localStorage.removeItem(STORAGE_KEYS.sha);
+    } catch (e) {}
+    await this.refresh(); // fetch fresh production data from GitHub
+  },
+
   async save(message) {
+    if (_guest) return { ok: true, noop: true }; // hard block — demo mode cannot save
     if (!_dirty) return { ok: true, noop: true };
     _loading = true; _error = null; notify();
     try {
