@@ -75,7 +75,7 @@ Represents a recurring bill or credit card. One row per bill. Payment history li
   "frequency": "monthly",
   "day": 1,                          // day-of-month due (1–31); for non-monthly, the day of the first/anchor occurrence
   "amount": 3077.99,                 // fixed amount; omit for variable CCs
-  "monthly_amount": 3077.99,         // optional; user's own estimate for budgeting (what was "Monthly Amt" in sheet)
+  "monthly_amount": 3077.99,         // LEGACY — no longer shown or editable in UI; safe to leave in existing data, never read
   "balance_remaining": 47200.00,     // optional; total outstanding balance (e.g. loan principal left); updated manually
   "variable": false,                 // true for CCs where amount fluctuates
   "next_due_date": "2026-05-01",     // optional override for non-monthly bills; otherwise derived
