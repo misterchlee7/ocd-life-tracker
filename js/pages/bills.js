@@ -1009,9 +1009,6 @@ function openBillForm(existing) {
         <label class="field"><span>Amount (leave blank for variable)</span>
           <input id="f-amount" type="number" step="0.01" value="${b.amount ?? ''}" />
         </label>
-        <label class="field"><span>Monthly estimate (optional)</span>
-          <input id="f-monthly" type="number" step="0.01" value="${b.monthly_amount ?? ''}" />
-        </label>
         <label class="field"><span>Total balance remaining (optional)</span>
           <input id="f-balance" type="number" step="0.01" value="${b.balance_remaining ?? ''}" />
         </label>
@@ -1072,7 +1069,6 @@ function openBillForm(existing) {
     if (!brand || !name) { toast('Brand and Name are required', 'error'); return; }
 
     const amountRaw = backdrop.querySelector('#f-amount').value;
-    const monthlyRaw = backdrop.querySelector('#f-monthly').value;
     const balanceRaw = backdrop.querySelector('#f-balance').value;
     const dueDate = backdrop.querySelector('#f-due-date').value;
     const lastUsed = backdrop.querySelector('#f-lastused').value;
@@ -1091,7 +1087,6 @@ function openBillForm(existing) {
       day: parseInt(backdrop.querySelector('#f-day').value, 10) || null,
       amount: amountRaw === '' ? null : parseFloat(amountRaw),
       variable: amountRaw === '',
-      monthly_amount: monthlyRaw === '' ? null : parseFloat(monthlyRaw),
       balance_remaining: balanceRaw === '' ? null : parseFloat(balanceRaw),
       due_date: dueDate || null,
       notes: backdrop.querySelector('#f-notes').value,
