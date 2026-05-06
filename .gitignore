@@ -3,4 +3,6 @@ imported-data.json
 *.json
 .DS_Store
 mockups/
+scripts/
+docs/decisions.md
 EOF
