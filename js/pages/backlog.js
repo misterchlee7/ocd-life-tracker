@@ -236,7 +236,7 @@ function wireInteractions(data) {
       const t = state.get().data?.backlog.find(x => x.id === id);
       if (!t || !confirm(`Delete "${t.title}"?`)) return;
       state.mutate(d => { d.backlog = d.backlog.filter(x => x.id !== id); }, `delete ${t.title}`);
-      toast('deleted', 'info');
+      toast(`Deleted: ${t.title}`, 'info');
     });
   });
 
@@ -342,7 +342,7 @@ function handleMenuAction(id, act) {
         const x = d.backlog.find(y => y.id === id);
         if (x) { x.status = 'done'; x.done_date = todayISO(); }
       }, 'done task');
-      toast('done ✓', 'success');
+      toast(`Done: ${t.title}`, 'success');
       break;
     case 'snooze': {
       const until = prompt('Snooze until (YYYY-MM-DD)', addDays(todayISO(), 7));
@@ -351,7 +351,7 @@ function handleMenuAction(id, act) {
         const x = d.backlog.find(y => y.id === id);
         if (x) { x.status = 'snoozed'; x.snoozed_until = until; }
       }, 'snooze task');
-      toast('snoozed', 'info');
+      toast(`Snoozed: ${t.title}`, 'info');
       break;
     }
     case 'reopen':
@@ -366,7 +366,7 @@ function handleMenuAction(id, act) {
     case 'delete':
       if (!confirm(`Delete "${t.title}"?`)) return;
       state.mutate(d => { d.backlog = d.backlog.filter(x => x.id !== id); }, 'delete task');
-      toast('deleted', 'info');
+      toast(`Deleted: ${t.title}`, 'info');
       break;
   }
 }
@@ -434,7 +434,7 @@ function openTaskForm(existing, defaultCat = 'do') {
       }
     }, isEdit ? 'edit task' : 'add task');
     el.remove();
-    toast(isEdit ? 'saved' : 'added', 'success');
+    toast(isEdit ? `Updated: ${patch.title}` : `Added: ${patch.title}`, 'success');
   };
 }
 

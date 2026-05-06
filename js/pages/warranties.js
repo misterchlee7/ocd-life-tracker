@@ -273,7 +273,7 @@ function wireInteractions(data) {
       const w = state.get().data?.warranties?.find(x => x.id === id);
       if (!w || !confirm(`Delete "${w.name}"?`)) return;
       state.mutate(d => { d.warranties = (d.warranties || []).filter(x => x.id !== id); }, `delete ${w.name}`);
-      toast('deleted', 'info');
+      toast(`Deleted: ${w.name}`, 'info');
     });
   });
 
@@ -386,7 +386,7 @@ function handleMenuAction(id, act) {
     case 'delete':
       if (!confirm(`Delete "${w.name}"?`)) return;
       state.mutate(d => { d.warranties = (d.warranties || []).filter(x => x.id !== id); }, `delete ${w.name}`);
-      toast('deleted', 'info');
+      toast(`Deleted: ${w.name}`, 'info');
       render(state.get());
       break;
   }
@@ -449,7 +449,7 @@ function openForm(existing) {
       }
     }, isEdit ? `edit warranty ${name}` : `add warranty ${name}`);
     el.remove();
-    toast(isEdit ? 'saved' : 'added', 'success');
+    toast(isEdit ? `Updated: ${name}` : `Added: ${name}`, 'success');
   };
 }
 

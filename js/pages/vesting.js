@@ -361,7 +361,7 @@ function wireInteractions(data) {
       if (!v) return;
       if (!confirm('Delete this vesting event?')) return;
       state.mutate(d => { d.vesting = d.vesting.filter(x => x.id !== id); }, 'delete event');
-      toast('deleted', 'info');
+      toast(`Deleted: ${v.date ? shortDate(v.date) : 'event'}`, 'info');
     });
   });
 
@@ -540,7 +540,7 @@ function handleEventAction(id, act) {
     case 'edit': openEventForm(v); break;
     case 'vest':
       state.mutate(d => { const e = d.vesting.find(x => x.id === id); if (e) e.status = 'vested'; }, 'mark vested');
-      toast('vested', 'success');
+      toast(`Vested: ${v.date ? shortDate(v.date) : 'event'}`, 'success');
       break;
     case 'sold': {
       const amt = prompt('Sold amount (proceeds $)', v.gross_value ?? '');
@@ -551,13 +551,13 @@ function handleEventAction(id, act) {
         const e = d.vesting.find(x => x.id === id);
         if (e) { e.status = 'sold'; e.sold_amount = n; e.sold_date = todayISO(); }
       }, 'mark sold');
-      toast('sold recorded', 'success');
+      toast(`Sold: ${v.date ? shortDate(v.date) : 'event'}`, 'success');
       break;
     }
     case 'delete':
       if (!confirm('Delete this vesting event?')) return;
       state.mutate(d => { d.vesting = d.vesting.filter(x => x.id !== id); }, 'delete event');
-      toast('deleted', 'info');
+      toast(`Deleted: ${v.date ? shortDate(v.date) : 'event'}`, 'info');
       break;
   }
 }
@@ -656,7 +656,7 @@ function openGrantsModal() {
           d.grants = d.grants.filter(x => x.id !== gId);
           d.vesting = d.vesting.filter(x => x.grant_id !== gId);
         }, 'delete grant');
-        toast('deleted', 'info');
+        toast(`Deleted grant: ${g.label}`, 'info');
         backdrop.innerHTML = buildHTML();
         rewire();
       });
@@ -745,7 +745,7 @@ function openEventForm(existing) {
       }
     }, isEdit ? 'edit event' : 'add event');
     el.remove();
-    toast(isEdit ? 'saved' : 'added', 'success');
+    toast(isEdit ? `Updated: ${patch.date ? shortDate(patch.date) : 'event'}` : `Added: ${patch.date ? shortDate(patch.date) : 'event'}`, 'success');
   };
 }
 
@@ -813,7 +813,7 @@ function openGrantForm(existing, onSaved) {
       }
     }, isEdit ? 'edit grant' : 'add grant');
     el.remove();
-    toast(isEdit ? 'saved' : 'added', 'success');
+    toast(isEdit ? `Updated grant: ${patch.label}` : `Added grant: ${patch.label}`, 'success');
     onSaved?.();
   };
 }

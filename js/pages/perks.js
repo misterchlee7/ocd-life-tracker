@@ -394,7 +394,7 @@ function wireInteractions(data) {
         d.perks = d.perks.filter(x => x.id !== id);
         d.perk_claims = d.perk_claims.filter(x => x.perk_id !== id);
       }, `delete ${perk.name}`);
-      toast('deleted', 'info');
+      toast(`Deleted: ${perk.name}`, 'info');
     });
   });
 
@@ -565,7 +565,7 @@ function handleMenuAction(id, act) {
         if (c) { c.status = 'claimed'; c.claimed_date = todayISO(); }
         else d.perk_claims.push({ id: uid(), perk_id: id, period, status: 'claimed', claimed_date: todayISO(), notes: '' });
       }, `claim ${perk.name}`);
-      toast('claimed', 'success');
+      toast(`Claimed: ${perk.name}`, 'success');
       break;
     case 'skip':
       state.mutate(d => {
@@ -591,7 +591,7 @@ function handleMenuAction(id, act) {
         d.perks = d.perks.filter(x => x.id !== id);
         d.perk_claims = d.perk_claims.filter(x => x.perk_id !== id);
       }, `delete ${perk.name}`);
-      toast('deleted', 'info');
+      toast(`Deleted: ${perk.name}`, 'info');
       break;
   }
 }
@@ -662,7 +662,7 @@ function openPerkForm(existing) {
     }, isEdit ? `edit perk ${patch.name}` : `add perk ${patch.name}`);
 
     el.remove();
-    toast(isEdit ? 'saved' : 'added', 'success');
+    toast(isEdit ? `Updated: ${patch.name}` : `Added: ${patch.name}`, 'success');
   };
 }
 

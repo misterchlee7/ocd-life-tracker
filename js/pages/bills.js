@@ -533,7 +533,7 @@ function wireInteractions(data) {
         d.bills = d.bills.filter(x => x.id !== id);
         d.payments = d.payments.filter(x => x.bill_id !== id);
       }, `delete ${bill.name}`);
-      toast('deleted', 'info');
+      toast(`Deleted: ${bill.brand} — ${bill.name}`, 'info');
     });
   });
 
@@ -1086,7 +1086,7 @@ function openBillForm(existing) {
     }, isEdit ? 'edit bill' : 'add bill');
 
     backdrop.remove();
-    toast(isEdit ? 'bill updated' : 'bill added', 'success');
+    toast(isEdit ? `Updated: ${brand} — ${name}` : `Added: ${brand} — ${name}`, 'success');
   };
 }
 

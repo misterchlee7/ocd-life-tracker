@@ -203,7 +203,8 @@ async function onRefresh() {
 }
 
 function onUndo() {
-  if (state.undo()) toast('undone', 'info');
+  const label = state.undo();
+  if (label) toast(`↶ Undone: ${label}`, 'info');
 }
 
 // ---------- Settings modal ----------

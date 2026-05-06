@@ -426,7 +426,7 @@ function wireInteractions() {
       if (!sub) return;
       if (!confirm(`Delete "${sub.name}"?`)) return;
       state.mutate(d => { d.subscriptions = d.subscriptions.filter(x => x.id !== id); }, `delete ${sub.name}`);
-      toast('deleted', 'info');
+      toast(`Deleted: ${sub.name}`, 'info');
     });
   });
 
@@ -657,7 +657,7 @@ function handleMenuAction(id, act) {
         const s = d.subscriptions.find(x => x.id === id);
         if (s) s.next_renewal = advanceRenewal(s);
       }, `advance ${sub.name}`);
-      toast('advanced', 'success');
+      toast(`Renewal advanced: ${sub.name}`, 'success');
       break;
     case 'cancel':
       state.mutate(d => { const s = d.subscriptions.find(x => x.id === id); if (s) s.status = 'cancelled'; }, `cancel ${sub.name}`);
@@ -671,7 +671,7 @@ function handleMenuAction(id, act) {
     case 'delete':
       if (!confirm(`Delete "${sub.name}"?`)) return;
       state.mutate(d => { d.subscriptions = d.subscriptions.filter(x => x.id !== id); }, `delete ${sub.name}`);
-      toast('deleted', 'info');
+      toast(`Deleted: ${sub.name}`, 'info');
       break;
   }
 }
@@ -753,7 +753,7 @@ function openSubForm(existing) {
     }, isEdit ? `edit sub ${patch.name}` : `add sub ${patch.name}`);
 
     el.remove();
-    toast(isEdit ? 'saved' : 'added', 'success');
+    toast(isEdit ? `Updated: ${patch.name}` : `Added: ${patch.name}`, 'success');
   };
 }
 

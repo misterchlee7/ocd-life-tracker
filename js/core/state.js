@@ -102,12 +102,12 @@ export const state = {
 
   undo() {
     const last = undoStack.pop();
-    if (!last) return false;
+    if (!last) return null;
     _data = last.snapshot;
     _dirty = true;
     cacheWrite();
     notify();
-    return true;
+    return last.label; // return label so UI can show what was undone
   },
 
   canUndo() { return undoStack.length > 0; },
