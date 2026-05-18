@@ -30,15 +30,16 @@ const FREQ_LABELS = {
   biannual: 'Biannual', annual: 'Annual', biennial: 'Biennial',
 };
 
-// For monthly subs, derive the next upcoming renewal from the stored anchor date
+// For active subs, derive the next upcoming renewal from the stored anchor date
 // rather than relying on the stored value being kept up to date manually.
 function computedRenewal(sub) {
-  if (!sub.next_renewal || sub.frequency !== 'monthly') return sub.next_renewal;
+  if (!sub.next_renewal || sub.status === 'cancelled') return sub.next_renewal;
   const today = todayISO();
   if (sub.next_renewal >= today) return sub.next_renewal;
+  const step = { monthly: 1, quarterly: 3, semi_annual: 6, biannual: 6, annual: 12, biennial: 24 }[sub.frequency] || 1;
   const d = new Date(sub.next_renewal + 'T00:00:00');
   while (d.toISOString().slice(0, 10) < today) {
-    d.setMonth(d.getMonth() + 1);
+    d.setMonth(d.getMonth() + step);
   }
   return d.toISOString().slice(0, 10);
 }
