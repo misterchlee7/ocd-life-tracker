@@ -205,8 +205,8 @@ th.sorted .sort-icon { color: var(--accent); }
 .modal-status { font-size: 12px; color: var(--text-muted); min-height: 16px; margin-top: 8px; }
 .modal-status.ok { color: var(--s-paid-fg); }
 .modal-status.err { color: var(--danger); }
-.clickable-card { cursor: pointer; }
-.clickable-card:hover { box-shadow: 0 0 0 2px var(--accent); }
+.clickable-card { cursor: pointer; transition: background 0.15s, box-shadow 0.15s; }
+.clickable-card:hover { background: #eef2fd; box-shadow: 0 0 0 2px var(--accent); }
 .breakdown-list {
   max-height: min(340px, 50vh); overflow-y: auto;
   border: 1px solid var(--border); border-radius: 8px;
