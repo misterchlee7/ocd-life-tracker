@@ -381,7 +381,7 @@ function statusPill(status) {
 
 function rowMenuHTML(s) {
   return `
-    <div class="menu">
+    <div class="menu" data-id="${s.id}">
       <div class="menu-item" data-act="edit"><div class="title">✏️ Edit</div></div>
       <div class="menu-item" data-act="advance"><div class="title">↻ Advance renewal one period</div><div class="desc">Push next_renewal forward</div></div>
       ${s.status !== 'cancelled' ? `<div class="menu-item" data-act="cancel"><div class="title">❌ Mark cancelled</div></div>` : ''}
@@ -442,8 +442,7 @@ function wireInteractions() {
   page.querySelectorAll('.menu-item').forEach(item => {
     item.addEventListener('click', (e) => {
       e.stopPropagation();
-      const row = item.closest('tr');
-      const id = row?.dataset.id;
+      const id = item.closest('.menu')?.dataset.id;
       if (!id) return;
       handleMenuAction(id, item.dataset.act);
       ui.openMenuId = null;
