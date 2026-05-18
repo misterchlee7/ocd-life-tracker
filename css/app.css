@@ -205,6 +205,29 @@ th.sorted .sort-icon { color: var(--accent); }
 .modal-status { font-size: 12px; color: var(--text-muted); min-height: 16px; margin-top: 8px; }
 .modal-status.ok { color: var(--s-paid-fg); }
 .modal-status.err { color: var(--danger); }
+.clickable-card { cursor: pointer; }
+.clickable-card:hover { box-shadow: 0 0 0 2px var(--accent); }
+.breakdown-list {
+  max-height: min(340px, 50vh); overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 8px;
+  margin-bottom: 0;
+}
+.breakdown-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 12px; font-size: 13.5px;
+  border-bottom: 1px solid var(--border);
+}
+.breakdown-row:last-child { border-bottom: none; }
+.breakdown-name { color: var(--text); }
+.breakdown-amount { font-weight: 600; color: var(--text); white-space: nowrap; margin-left: 12px; }
+.breakdown-empty { padding: 16px 12px; font-size: 13px; color: var(--text-muted); text-align: center; }
+.breakdown-total {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 12px; font-size: 13.5px; font-weight: 650;
+  border: 1px solid var(--border); border-top: none;
+  border-radius: 0 0 8px 8px; background: var(--bg-subtle, #f7f7f9);
+  margin-bottom: 4px;
+}
 .amount-modal { width: min(320px, 92vw); }
 .amount-modal-input-wrap {
   display: flex; align-items: center; gap: 6px;

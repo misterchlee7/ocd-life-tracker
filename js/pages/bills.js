@@ -226,12 +226,12 @@ function summaryHTML(data) {
 
   return `
     <div class="summary summary-5">
-      <div class="card">
+      <div class="card clickable-card" data-breakdown="pending">
         <div class="label">Pending this month</div>
         <div class="value">${fmtMoney(pendingMonth)}</div>
         <div class="sub">${pendingWhoSub || '&nbsp;'}</div>
       </div>
-      <div class="card">
+      <div class="card clickable-card" data-breakdown="paid">
         <div class="label">Paid this month</div>
         <div class="value">${fmtMoney(paidMonth)}</div>
         <div class="sub">${paidSub}</div>
@@ -557,6 +557,11 @@ function wireInteractions(data) {
     });
   });
 
+  // summary card breakdown modals
+  document.querySelectorAll('.clickable-card[data-breakdown]').forEach(card => {
+    card.addEventListener('click', () => showBreakdownModal(data, card.dataset.breakdown));
+  });
+
   // status click: cycle
   document.querySelectorAll('.status.clickable').forEach(el => {
     el.addEventListener('click', (e) => {
@@ -830,6 +835,67 @@ function cycleStatus(billId) {
       }, 'reset payment');
     }
   }
+}
+
+// ---------- breakdown modal ----------
+
+function showBreakdownModal(data, type) {
+  const existing = document.getElementById('breakdown-modal-backdrop');
+  if (existing) existing.remove();
+
+  const filtered = data.bills.filter(b => !b.archived);
+  let items = [];
+
+  if (type === 'pending') {
+    for (const b of filtered) {
+      const { status, payment } = statusForRow(data, b);
+      if (payment && payment.pending_amount > 0 && status !== 'paid' && status !== 'skipped') {
+        items.push({ name: `${b.brand ? b.brand + ' ' : ''}${b.name}`, amount: payment.pending_amount, who: b.who });
+      }
+    }
+    items.sort((a, b) => b.amount - a.amount);
+  } else {
+    for (const b of filtered) {
+      const { status, payment } = statusForRow(data, b);
+      if (status === 'paid' && payment?.paid_amount != null && payment.paid_date?.slice(0, 7) === ui.month) {
+        items.push({ name: `${b.brand ? b.brand + ' ' : ''}${b.name}`, amount: payment.paid_amount, who: b.who });
+      }
+    }
+    items.sort((a, b) => b.amount - a.amount);
+  }
+
+  const total = items.reduce((s, i) => s + i.amount, 0);
+  const title = type === 'pending' ? 'Pending this month' : 'Paid this month';
+  const monthLabel = new Date(ui.month + '-02').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  const rows = items.length
+    ? items.map(i => `
+        <div class="breakdown-row">
+          <span class="breakdown-name">${i.name}</span>
+          <span class="breakdown-amount">${fmtMoney(i.amount)}</span>
+        </div>`).join('')
+    : `<div class="breakdown-empty">No bills to show.</div>`;
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'breakdown-modal-backdrop';
+  backdrop.className = 'modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="modal" style="width:min(420px,92vw)">
+      <h2>${title}</h2>
+      <p class="modal-sub">${monthLabel}</p>
+      <div class="breakdown-list">${rows}</div>
+      <div class="breakdown-total">
+        <span>Total</span>
+        <span>${fmtMoney(total)}</span>
+      </div>
+      <div class="modal-actions" style="justify-content:flex-end">
+        <button class="btn primary" id="breakdown-close">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+  backdrop.querySelector('#breakdown-close').addEventListener('click', () => backdrop.remove());
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) backdrop.remove(); });
 }
 
 // ---------- amount modal (replaces native prompt) ----------
