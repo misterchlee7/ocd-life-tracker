@@ -23,6 +23,7 @@ Canonical shape of `data.json` stored in the `ocd-life-tracker-data` repo. This 
   "subscriptions": [ /* Subscription */ ],
   "grants":        [ /* Grant — RSU/ESPP parent */ ],
   "vesting":       [ /* VestingEvent */ ],
+  "stock_prices":  { /* ticker → price, e.g. "CSCO": 115.46 */ },
   "backlog":       [ /* BacklogItem */ ],
   "warranties":    [ /* Warranty */ ]   // optional; accessed as data.warranties || []
 }
@@ -179,6 +180,7 @@ One per period per perk, tracking status.
   "id": "g24r001",
   "label": "G-24-R-001",             // internal identifier (shown in Grants… modal and event form picker)
   "company": "Cisco",                // optional; issuing company — shown as "Company" column in events table
+  "ticker": "CSCO",                  // optional; stock ticker — links grant to stock_prices for auto gross value
   "broker": "E*Trade",               // optional; brokerage account — shown as "Broker" column in events table
   "type": "rsu",                     // grant_type
   "who": "chang",
@@ -200,7 +202,7 @@ One per period per perk, tracking status.
   "who": "chang",
   "date": "2026-05-10",
   "shares": 50,                      // optional
-  "gross_value": 12551.97,           // user's estimate or actual at event
+  "gross_value": 12551.97,           // stored value; auto-computed as shares × stock_prices[grant.ticker] for upcoming/vested when ticker is set. Sold/pending_settlement always use the stored value (historical).
   "status": "upcoming",              // vest_status enum
   "sold_date": null,
   "sold_amount": null,
