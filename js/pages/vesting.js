@@ -29,6 +29,21 @@ function grantLabel(g) {
   return parts.length ? parts.join(' · ') : (g.label || '—');
 }
 
+function computedGrossValue(v, data) {
+  const grant = data.grants.find(g => g.id === v.grant_id);
+  const ticker = grant?.ticker?.toUpperCase();
+  const price = ticker ? (data.stock_prices || {})[ticker] : null;
+  if (price != null && v.shares != null) return v.shares * price;
+  return v.gross_value;
+}
+
+function isAutoValue(v, data) {
+  const grant = data.grants.find(g => g.id === v.grant_id);
+  const ticker = grant?.ticker?.toUpperCase();
+  const price = ticker ? (data.stock_prices || {})[ticker] : null;
+  return price != null && v.shares != null;
+}
+
 function filterEvents(data) {
   const q = ui.search.trim().toLowerCase();
   return data.vesting.filter(v => {
@@ -45,12 +60,12 @@ function filterEvents(data) {
   });
 }
 
-function sortEvents(events) {
+function sortEvents(events, data) {
   const { key, dir } = ui.sort;
   const mul = dir === 'asc' ? 1 : -1;
   return [...events].sort((a, b) => {
     switch (key) {
-      case 'value': return ((a.gross_value || 0) - (b.gross_value || 0)) * mul;
+      case 'value': return ((computedGrossValue(a, data) || 0) - (computedGrossValue(b, data) || 0)) * mul;
       case 'shares': return ((a.shares || 0) - (b.shares || 0)) * mul;
       case 'date':
       default: return (a.date || '9999-99-99').localeCompare(b.date || '9999-99-99') * mul;
@@ -69,8 +84,8 @@ function render({ data, loading }) {
   const events = data.vesting;
   const upcoming = events.filter(v => v.status === 'upcoming' && v.date);
   const next90 = upcoming.filter(v => { const d = daysFromToday(v.date); return d >= 0 && d <= 90; });
-  const next90Value = next90.reduce((a, v) => a + (v.gross_value || 0), 0);
-  const totalUpcomingValue = upcoming.reduce((a, v) => a + (v.gross_value || 0), 0);
+  const next90Value = next90.reduce((a, v) => a + (computedGrossValue(v, data) || 0), 0);
+  const totalUpcomingValue = upcoming.reduce((a, v) => a + (computedGrossValue(v, data) || 0), 0);
   const currentYear = String(new Date().getFullYear());
   const soldYTD = events
     .filter(v => v.status === 'sold' && v.sold_date?.startsWith(currentYear))
@@ -78,15 +93,17 @@ function render({ data, loading }) {
   const nextEvent = [...upcoming].sort((a, b) => a.date.localeCompare(b.date))[0];
 
   page.innerHTML = `
-    ${summaryHTML({ nextEvent, next90Value, totalUpcomingValue, soldYTD, upcomingCount: upcoming.length })}
+    ${summaryHTML({ nextEvent, next90Value, totalUpcomingValue, soldYTD, upcomingCount: upcoming.length, data })}
+    ${stockPricesHTML(data)}
     ${renderEvents(data)}
   `;
 
   wireInteractions(data);
 }
 
-function summaryHTML({ nextEvent, next90Value, totalUpcomingValue, soldYTD, upcomingCount }) {
-  const nextLabel = nextEvent ? `${shortDate(nextEvent.date)} · ${fmtMoneyShort(nextEvent.gross_value)}` : '—';
+function summaryHTML({ nextEvent, next90Value, totalUpcomingValue, soldYTD, upcomingCount, data }) {
+  const nextEventValue = nextEvent ? computedGrossValue(nextEvent, data) : null;
+  const nextLabel = nextEvent ? `${shortDate(nextEvent.date)} · ${fmtMoneyShort(nextEventValue)}` : '—';
   const nextSub = nextEvent ? relativeDays(nextEvent.date) : 'nothing upcoming';
   return `
     <div class="summary">
@@ -110,6 +127,24 @@ function summaryHTML({ nextEvent, next90Value, totalUpcomingValue, soldYTD, upco
         <div class="value">${fmtMoney(soldYTD)}</div>
         <div class="sub">realized proceeds</div>
       </div>
+    </div>
+  `;
+}
+
+function stockPricesHTML(data) {
+  const prices = data.stock_prices || {};
+  const tickers = Object.keys(prices);
+  const items = tickers.map(t =>
+    `<span class="sp-item">
+      <span class="sp-ticker">${escapeHTML(t)}</span>
+      <span class="sp-price editable-cell" data-price-ticker="${escapeAttr(t)}">${fmtMoney(prices[t])}</span>
+    </span>`
+  ).join('');
+  return `
+    <div class="stock-prices-bar">
+      <span class="sp-label">Stock prices</span>
+      ${items}
+      <button class="btn-link sp-add" id="sp-add-btn">+ Add ticker</button>
     </div>
   `;
 }
@@ -142,7 +177,7 @@ function massEditBarHTML() {
 }
 
 function renderEvents(data) {
-  const filtered = sortEvents(filterEvents(data));
+  const filtered = sortEvents(filterEvents(data), data);
   const chip = (val, label) => `<div class="chip ${ui.who === val ? 'active' : ''}" data-w="${val}">${label}</div>`;
 
   const filtersBar = `
@@ -238,7 +273,7 @@ function eventRowHTML(data, v) {
       <td class="status-cell" data-type-event-id="${v.id}">${GRANT_TYPE_LABELS[v.type] || v.type}</td>
       <td class="status-cell" data-who-event-id="${v.id}">${whoPill(v.who)}</td>
       <td class="editable-cell" data-shares-event-id="${v.id}">${v.shares ?? '—'}</td>
-      <td class="editable-cell" data-value-event-id="${v.id}">${fmtMoney(v.gross_value)}</td>
+      <td class="${isAutoValue(v, data) ? '' : 'editable-cell'}" data-value-event-id="${v.id}" title="${isAutoValue(v, data) ? 'Computed from stock price × shares' : 'Click to edit'}">${fmtMoney(computedGrossValue(v, data))}</td>
       <td>${vestStatusPill(v.status)}</td>
       <td>${proceedsCell}</td>
       <td class="row-actions">
@@ -516,17 +551,46 @@ function wireInteractions(data) {
     });
   });
 
-  // Gross value
+  // Gross value (only editable when not auto-computed from stock price)
   page.querySelectorAll('td[data-value-event-id]').forEach(td => {
     td.addEventListener('click', () => {
       const id = td.dataset.valueEventId;
-      const v = state.get().data?.vesting.find(x => x.id === id);
-      if (!v) return;
+      const snap = state.get();
+      const v = snap.data?.vesting.find(x => x.id === id);
+      if (!v || isAutoValue(v, snap.data)) return;
       inlineNumber(td, v.gross_value, val => {
         if (val !== v.gross_value) state.mutate(d => { const ev = d.vesting.find(x => x.id === id); if (ev) ev.gross_value = val; }, 'edit gross value');
         else render(state.get());
       });
     });
+  });
+
+  // Stock price inline editing
+  page.querySelectorAll('.sp-price[data-price-ticker]').forEach(el => {
+    el.addEventListener('click', () => {
+      const ticker = el.dataset.priceTicker;
+      const current = (state.get().data?.stock_prices || {})[ticker] || 0;
+      inlineNumber(el, current, val => {
+        state.mutate(d => {
+          if (!d.stock_prices) d.stock_prices = {};
+          d.stock_prices[ticker] = val;
+        }, `update ${ticker} price`);
+      });
+    });
+  });
+
+  // Add ticker
+  document.getElementById('sp-add-btn')?.addEventListener('click', () => {
+    const ticker = prompt('Ticker symbol (e.g. CSCO)')?.trim().toUpperCase();
+    if (!ticker) return;
+    const priceStr = prompt(`Price for ${ticker} ($)`);
+    if (priceStr == null) return;
+    const price = Number(priceStr);
+    if (!isFinite(price) || price <= 0) { alert('Invalid price'); return; }
+    state.mutate(d => {
+      if (!d.stock_prices) d.stock_prices = {};
+      d.stock_prices[ticker] = price;
+    }, `add ${ticker} price`);
   });
 
   // Move open menu to body with position:fixed — avoids overflow-parent clipping
@@ -549,7 +613,7 @@ function handleEventAction(id, act) {
       toast(`Vested: ${v.date ? shortDate(v.date) : 'event'}`, 'success');
       break;
     case 'sold': {
-      const amt = prompt('Sold amount (proceeds $)', v.gross_value ?? '');
+      const amt = prompt('Sold amount (proceeds $)', computedGrossValue(v, data) ?? '');
       if (amt == null) return;
       const n = Number(amt);
       if (!isFinite(n)) return;
@@ -758,7 +822,7 @@ function openEventForm(existing) {
 function openGrantForm(existing, onSaved) {
   const isEdit = !!existing;
   const g = existing || {
-    id: uid(), label: '', company: '', broker: '', type: 'rsu', who: 'chang',
+    id: uid(), label: '', company: '', broker: '', ticker: '', type: 'rsu', who: 'chang',
     grant_date: todayISO(), total_shares: null, schedule_note: '', archived: false, notes: '',
   };
 
@@ -770,6 +834,7 @@ function openGrantForm(existing, onSaved) {
       <div class="form-grid">
         <label class="field"><span>Label / ID</span><input id="f-label" value="${escapeAttr(g.label)}" placeholder="G-24-R-001"/></label>
         <label class="field"><span>Company</span><input id="f-company" value="${escapeAttr(g.company || '')}" placeholder="Cisco"/></label>
+        <label class="field"><span>Ticker</span><input id="f-ticker" value="${escapeAttr(g.ticker || '')}" placeholder="CSCO" style="text-transform:uppercase"/></label>
         <label class="field"><span>Broker / Account</span><input id="f-broker" value="${escapeAttr(g.broker || '')}" placeholder="E*Trade"/></label>
         <label class="field"><span>Type</span>
           <select id="f-type-in">
@@ -801,6 +866,7 @@ function openGrantForm(existing, onSaved) {
     const patch = {
       label: el.querySelector('#f-label').value.trim(),
       company: el.querySelector('#f-company').value.trim(),
+      ticker: el.querySelector('#f-ticker').value.trim().toUpperCase() || null,
       broker: el.querySelector('#f-broker').value.trim(),
       type: el.querySelector('#f-type-in').value,
       who: el.querySelector('#f-who-in').value,

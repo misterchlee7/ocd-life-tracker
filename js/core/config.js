@@ -36,6 +36,7 @@ export function emptyData() {
     subscriptions: [],
     grants: [],
     vesting: [],
+    stock_prices: {},
     backlog: [],
   };
 }
