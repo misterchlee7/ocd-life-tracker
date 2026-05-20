@@ -30,6 +30,7 @@ function grantLabel(g) {
 }
 
 function computedGrossValue(v, data) {
+  if (v.status === 'sold' || v.status === 'pending_settlement') return v.gross_value;
   const grant = data.grants.find(g => g.id === v.grant_id);
   const ticker = grant?.ticker?.toUpperCase();
   const price = ticker ? (data.stock_prices || {})[ticker] : null;
@@ -38,6 +39,7 @@ function computedGrossValue(v, data) {
 }
 
 function isAutoValue(v, data) {
+  if (v.status === 'sold' || v.status === 'pending_settlement') return false;
   const grant = data.grants.find(g => g.id === v.grant_id);
   const ticker = grant?.ticker?.toUpperCase();
   const price = ticker ? (data.stock_prices || {})[ticker] : null;
