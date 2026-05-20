@@ -187,7 +187,7 @@ function statusPill(s) {
 
 function menuHTML(t) {
   return `
-    <div class="menu">
+    <div class="menu" data-id="${t.id}">
       <div class="menu-item" data-act="edit"><div class="title">✏️ Edit</div></div>
       ${t.status !== 'in_progress' ? `<div class="menu-item" data-act="start"><div class="title">▶️ Start (in progress)</div></div>` : ''}
       ${t.status !== 'done' ? `<div class="menu-item" data-act="done"><div class="title">✅ Mark done</div></div>` : ''}
@@ -251,7 +251,7 @@ function wireInteractions(data) {
   page.querySelectorAll('.menu-item').forEach(item => {
     item.addEventListener('click', (e) => {
       e.stopPropagation();
-      const id = item.closest('tr')?.dataset.id;
+      const id = item.closest('.menu')?.dataset.id;
       if (!id) return;
       handleMenuAction(id, item.dataset.act);
       ui.openMenuId = null;

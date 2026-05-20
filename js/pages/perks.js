@@ -337,7 +337,7 @@ function statusPill(status, perkId) {
 
 function rowMenuHTML(perk, status) {
   return `
-    <div class="menu">
+    <div class="menu" data-id="${perk.id}">
       <div class="menu-item" data-act="edit"><div class="title">✏️ Edit perk</div></div>
       ${status !== 'claimed' ? `<div class="menu-item" data-act="claim"><div class="title">✅ Mark claimed today</div></div>` : ''}
       ${status !== 'skipped' ? `<div class="menu-item" data-act="skip"><div class="title">➖ Mark skipped</div></div>` : ''}
@@ -409,8 +409,7 @@ function wireInteractions(data) {
   page.querySelectorAll('.menu-item').forEach(item => {
     item.addEventListener('click', (e) => {
       e.stopPropagation();
-      const row = item.closest('tr');
-      const id = row?.dataset.id;
+      const id = item.closest('.menu')?.dataset.id;
       if (!id) return;
       handleMenuAction(id, item.dataset.act);
       ui.openMenuId = null;

@@ -295,7 +295,7 @@ function vestStatusPill(s) {
 
 function eventMenuHTML(v) {
   return `
-    <div class="menu">
+    <div class="menu" data-id="${v.id}">
       <div class="menu-item" data-act="edit"><div class="title">✏️ Edit event</div></div>
       ${v.status !== 'vested' ? `<div class="menu-item" data-act="vest"><div class="title">✅ Mark vested</div></div>` : ''}
       ${v.status !== 'sold' ? `<div class="menu-item" data-act="sold"><div class="title">💰 Mark sold…</div></div>` : ''}
@@ -411,7 +411,7 @@ function wireInteractions(data) {
   page.querySelectorAll('.menu-item').forEach(item => {
     item.addEventListener('click', (e) => {
       e.stopPropagation();
-      const id = item.closest('tr')?.dataset.id;
+      const id = item.closest('.menu')?.dataset.id;
       if (!id) return;
       handleEventAction(id, item.dataset.act);
       ui.openMenuId = null;
