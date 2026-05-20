@@ -247,6 +247,7 @@ function renderEvents(data) {
             <th>Who</th>
             ${thSortable('shares', 'Shares')}
             ${thSortable('value', 'Gross value')}
+            <th>Share price</th>
             <th>Status</th>
             <th>Proceeds</th>
             <th></th>
@@ -276,6 +277,7 @@ function eventRowHTML(data, v) {
       <td class="status-cell" data-who-event-id="${v.id}">${whoPill(v.who)}</td>
       <td class="editable-cell" data-shares-event-id="${v.id}">${v.shares ?? '—'}</td>
       <td class="${isAutoValue(v, data) ? '' : 'editable-cell'}" data-value-event-id="${v.id}" title="${isAutoValue(v, data) ? 'Computed from stock price × shares' : 'Click to edit'}">${fmtMoney(computedGrossValue(v, data))}</td>
+      <td class="num">${v.shares ? fmtMoney(computedGrossValue(v, data) / v.shares) : '—'}</td>
       <td>${vestStatusPill(v.status)}</td>
       <td>${proceedsCell}</td>
       <td class="row-actions">
