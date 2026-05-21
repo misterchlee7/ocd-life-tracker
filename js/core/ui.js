@@ -114,6 +114,7 @@ function initTabDrag() {
 
 export function initTopbar() {
   initTabDrag();
+  if (isMobile()) initMobileNav();
 
   // hook up Save / Refresh / Settings / Undo buttons, if present
   document.getElementById('btn-save')?.addEventListener('click', () => {
@@ -385,6 +386,130 @@ export function whoPill(who) {
   const cls = WHO_CLASS[who] || '';
   const label = WHO_LABEL[who] || who || '';
   return `<span class="pill ${cls}">${label}</span>`;
+}
+
+// ---------- Mobile detection ----------
+
+export function isMobile() {
+  return window.matchMedia('(max-width: 767px)').matches;
+}
+
+// ---------- Bottom sheet ----------
+
+// Shows a slide-up action sheet on mobile.
+// items: [{ label, description, icon, danger, disabled, action }]
+// Returns a close() function.
+export function showBottomSheet({ title, items = [], onClose } = {}) {
+  document.getElementById('bottom-sheet-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'bottom-sheet-overlay';
+  overlay.className = 'bottom-sheet-overlay';
+
+  const sheet = document.createElement('div');
+  sheet.className = 'bottom-sheet';
+
+  let html = `<div class="bs-handle"></div>`;
+  if (title) html += `<div class="bs-title">${title}</div>`;
+  html += `<div class="bs-items">`;
+  items.forEach((item, i) => {
+    const cls = ['bs-item', item.danger ? 'danger' : ''].filter(Boolean).join(' ');
+    html += `<button class="${cls}" data-idx="${i}" ${item.disabled ? 'disabled' : ''}>`;
+    if (item.icon) html += `<span class="bs-icon">${item.icon}</span>`;
+    html += `<span class="bs-body">`;
+    html += `<span class="bs-label">${item.label}</span>`;
+    if (item.description) html += `<span class="bs-desc">${item.description}</span>`;
+    html += `</span></button>`;
+  });
+  html += `</div>`;
+
+  sheet.innerHTML = html;
+  overlay.appendChild(sheet);
+  document.body.appendChild(overlay);
+
+  requestAnimationFrame(() => overlay.classList.add('open'));
+
+  function close() {
+    overlay.classList.remove('open');
+    setTimeout(() => overlay.remove(), 250);
+    onClose?.();
+  }
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  sheet.querySelectorAll('.bs-item:not([disabled])').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = +btn.dataset.idx;
+      close();
+      items[idx]?.action?.();
+    });
+  });
+
+  return close;
+}
+
+// ---------- Mobile nav ----------
+
+function initMobileNav() {
+  const path = window.location.pathname.split('/').pop() || 'dashboard.html';
+
+  const mainPages = [
+    { href: 'dashboard.html',     icon: '⌂', label: 'Home'  },
+    { href: 'bills.html',         icon: '≋',  label: 'Bills' },
+    { href: 'perks.html',         icon: '★',  label: 'Perks' },
+    { href: 'subscriptions.html', icon: '↻',  label: 'Subs'  },
+  ];
+  const morePages = [
+    { href: 'vesting.html',    label: 'Vesting'    },
+    { href: 'backlog.html',    label: 'Backlog'    },
+    { href: 'warranties.html', label: 'Warranties' },
+  ];
+  const isMoreActive = morePages.some(p => path === p.href);
+
+  const nav = document.createElement('nav');
+  nav.id = 'mobile-nav';
+  nav.setAttribute('aria-label', 'Main navigation');
+
+  mainPages.forEach(pg => {
+    const active = path === pg.href ||
+      (pg.href === 'dashboard.html' && (path === '' || path === 'index.html'));
+    const a = document.createElement('a');
+    a.href = pg.href;
+    a.className = 'mobile-nav-item' + (active ? ' active' : '');
+    a.innerHTML = `<span class="mobile-nav-icon">${pg.icon}</span><span class="mobile-nav-label">${pg.label}</span>`;
+    nav.appendChild(a);
+  });
+
+  const moreBtn = document.createElement('button');
+  moreBtn.className = 'mobile-nav-item' + (isMoreActive ? ' active' : '');
+  moreBtn.innerHTML = `<span class="mobile-nav-icon">···</span><span class="mobile-nav-label">More</span>`;
+  moreBtn.addEventListener('click', () => {
+    showBottomSheet({
+      title: 'More',
+      items: morePages.map(p => ({
+        label: p.label,
+        action: () => {
+          if (state.get().dirty && !state.get().guest) openNavGuard(p.href);
+          else location.href = p.href;
+        },
+      })),
+    });
+  });
+  nav.appendChild(moreBtn);
+
+  document.body.appendChild(nav);
+
+  // Apply nav guard to mobile nav links
+  nav.querySelectorAll('a').forEach(link => {
+    link.addEventListener('click', e => {
+      const s = state.get();
+      if (!s.dirty || s.guest) return;
+      const href = link.getAttribute('href');
+      if (!href || link.classList.contains('active')) return;
+      e.preventDefault();
+      openNavGuard(href);
+    });
+  });
 }
 
 // ---------- Menu positioning ----------

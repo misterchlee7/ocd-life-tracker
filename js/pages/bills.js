@@ -1,5 +1,5 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu } from '../core/ui.js';
+import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu } from '../core/ui.js';
 import { periodFor, todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
 import { paymentFor, yearProgress, rotation, needsConfirm } from '../core/derive.js';
 
@@ -1223,5 +1223,9 @@ function escapeAttr(s) {
 
 // ---------- boot ----------
 
-state.subscribe(render);
-bootstrap();
+if (isMobile()) {
+  import('./bills-mobile.js').then(m => m.init());
+} else {
+  state.subscribe(render);
+  bootstrap();
+}

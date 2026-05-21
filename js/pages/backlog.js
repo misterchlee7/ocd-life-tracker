@@ -1,5 +1,5 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, toast } from '../core/ui.js';
+import { bootstrap, isMobile, toast } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
 
 const page = document.getElementById('page');
@@ -452,5 +452,9 @@ function escapeHTML(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-state.subscribe(render);
-bootstrap();
+if (isMobile()) {
+  import('./backlog-mobile.js').then(m => m.init());
+} else {
+  state.subscribe(render);
+  bootstrap();
+}

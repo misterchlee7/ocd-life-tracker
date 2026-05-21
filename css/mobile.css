@@ -1,0 +1,391 @@
+/* OCD Life Tracker — mobile styles */
+
+/* ---- Bottom sheet (always in DOM, usable from JS on mobile) ---- */
+
+#mobile-nav { display: none; }
+
+.bottom-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 10, 20, 0.45);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.bottom-sheet-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.bottom-sheet {
+  width: 100%;
+  background: #fff;
+  border-radius: 18px 18px 0 0;
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+  transform: translateY(100%);
+  transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+  max-height: 80vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.bottom-sheet-overlay.open .bottom-sheet {
+  transform: translateY(0);
+}
+.bs-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: #d0d0d6;
+  margin: 12px auto 4px;
+  flex-shrink: 0;
+}
+.bs-title {
+  padding: 8px 20px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+}
+.bs-items {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+}
+.bs-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+}
+.bs-item:last-child { border-bottom: none; }
+.bs-item:active { background: #f3f3f5; }
+.bs-item[disabled] { opacity: 0.4; cursor: not-allowed; }
+.bs-item.danger .bs-label { color: var(--danger); }
+.bs-icon { font-size: 18px; width: 24px; text-align: center; flex-shrink: 0; }
+.bs-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bs-label { font-size: 15px; font-weight: 500; }
+.bs-desc { font-size: 12.5px; color: var(--text-muted); }
+
+/* ---- Mobile-only overrides (≤ 767px) ---- */
+@media (max-width: 767px) {
+
+  /* Simplify topbar — hide undo + refresh, keep settings + save */
+  #btn-undo,
+  #btn-undo + span,
+  #btn-refresh { display: none !important; }
+
+  .topbar { padding: 10px 16px; }
+  .brand { font-size: 14px; }
+
+  /* Hide desktop tab nav */
+  nav.tabs { display: none !important; }
+
+  /* Page: tighter padding + space for bottom nav */
+  .page { padding: 12px 14px 80px; max-width: 100%; }
+
+  /* Toast: float above bottom nav */
+  #toast-host { bottom: 68px; right: 14px; }
+
+  /* Demo banner: compact on mobile */
+  .demo-banner { font-size: 12px; padding: 6px 12px; flex-wrap: wrap; gap: 6px; }
+  .demo-banner .demo-login-btn { font-size: 11px; padding: 3px 9px; }
+
+  /* Summary grid: 2-col on mobile */
+  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .summary.summary-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /* ---- Bottom nav ---- */
+  #mobile-nav {
+    display: flex !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  .mobile-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    text-decoration: none;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px 4px 4px;
+    font: inherit;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.1s;
+  }
+  .mobile-nav-item.active { color: var(--accent); }
+  .mobile-nav-item:active { opacity: 0.7; }
+  .mobile-nav-icon { font-size: 19px; line-height: 1; }
+  .mobile-nav-label { font-size: 10px; font-weight: 500; letter-spacing: 0.01em; }
+
+  /* ---- Mobile card list ---- */
+  .m-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .m-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    box-shadow: var(--shadow);
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .m-card:active { background: #fafafb; }
+
+  .m-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .m-card-name { font-weight: 600; font-size: 14px; line-height: 1.3; }
+  .m-card-name-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+  .m-card-amount {
+    font-size: 16px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right; flex-shrink: 0;
+  }
+  .m-card-amount.paid { color: var(--s-paid-fg); }
+  .m-card-amount-sub { font-size: 11px; color: var(--text-muted); text-align: right; margin-top: 1px; }
+
+  .m-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .m-card-left  { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .m-card-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+  /* Primary tap target on cards */
+  .m-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border-radius: 7px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border-strong);
+    background: #fff;
+    color: var(--text);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .m-action-btn.primary  { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .m-action-btn.success  { background: var(--s-paid-bg); color: var(--s-paid-fg); border-color: #b4e4bf; }
+  .m-action-btn.warn     { background: var(--s-need-bg); color: var(--s-need-fg); border-color: #f1c271; }
+  .m-action-btn.muted    { background: var(--s-skip-bg); color: var(--s-skip-fg); border-color: var(--border-strong); }
+  .m-action-btn:active   { filter: brightness(0.95); }
+
+  /* Dots button on mobile cards (opens bottom sheet) */
+  .m-dots-btn {
+    background: none;
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 16px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .m-dots-btn:active { background: var(--bg); }
+
+  /* ---- Mobile filter chips (horizontal scroll) ---- */
+  .m-filter-bar {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+    margin-bottom: 10px;
+  }
+  .m-filter-bar::-webkit-scrollbar { display: none; }
+
+  .m-chip {
+    flex-shrink: 0;
+    padding: 5px 13px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border-strong);
+    background: #fff;
+    color: var(--text-muted);
+    -webkit-tap-highlight-color: transparent;
+    white-space: nowrap;
+    font: inherit;
+    font-size: 13px;
+  }
+  .m-chip.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  /* ---- Mobile summary strip (horizontally scrollable stat cards) ---- */
+  .m-summary-strip {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin-bottom: 12px;
+    padding-bottom: 2px;
+  }
+  .m-summary-strip::-webkit-scrollbar { display: none; }
+
+  .m-summary-card {
+    flex-shrink: 0;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    min-width: 110px;
+    box-shadow: var(--shadow);
+  }
+  .m-summary-card .label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 2px;
+  }
+  .m-summary-card .value {
+    font-size: 15px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .m-summary-card .sub {
+    font-size: 10.5px;
+    color: var(--text-faint);
+    margin-top: 1px;
+  }
+  .m-summary-card .value.warn { color: var(--s-need-fg); }
+
+  /* ---- Mobile page header ---- */
+  .m-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .m-page-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  /* ---- Mobile section label ---- */
+  .m-section-hdr {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    padding: 0 2px;
+    margin: 16px 0 6px;
+  }
+  .m-section-hdr:first-child { margin-top: 0; }
+
+  /* ---- Mobile empty state ---- */
+  .m-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-size: 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .m-empty-icon { font-size: 28px; margin-bottom: 8px; }
+  .m-empty-msg { font-weight: 500; margin-bottom: 4px; color: var(--text); }
+  .m-empty-sub { font-size: 12.5px; }
+
+  /* ---- Mobile month nav (compact) ---- */
+  .m-month-nav {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    overflow: hidden;
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  .m-month-nav button {
+    background: none;
+    border: none;
+    padding: 6px 12px;
+    cursor: pointer;
+    font: inherit;
+    color: var(--text-muted);
+    font-size: 15px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .m-month-nav button:active { background: var(--border); }
+  .m-month-label {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 8px;
+    flex: 1;
+    text-align: center;
+    border-left: 1px solid var(--border-strong);
+    border-right: 1px solid var(--border-strong);
+  }
+
+  /* Small count badge inside filter chip */
+  .m-chip-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.12);
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    margin-left: 4px;
+    vertical-align: 1px;
+  }
+  .m-chip.active .m-chip-count {
+    background: rgba(255,255,255,0.25);
+  }
+}

@@ -1,5 +1,5 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu } from '../core/ui.js';
+import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu } from '../core/ui.js';
 import { periodFor, todayISO, shortDate } from '../core/dates.js';
 import { claimsFor } from '../core/derive.js';
 
@@ -682,5 +682,9 @@ function truncate(s, max) {
 
 // ---------- boot ----------
 
-state.subscribe(render);
-bootstrap();
+if (isMobile()) {
+  import('./perks-mobile.js').then(m => m.init());
+} else {
+  state.subscribe(render);
+  bootstrap();
+}

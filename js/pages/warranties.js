@@ -1,5 +1,5 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, whoPill, toast, positionMenu } from '../core/ui.js';
+import { bootstrap, isMobile, whoPill, toast, positionMenu } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
 
 const page = document.getElementById('page');
@@ -471,5 +471,9 @@ function truncate(s, max) {
 
 // ---------- boot ----------
 
-state.subscribe(render);
-bootstrap();
+if (isMobile()) {
+  import('./warranties-mobile.js').then(m => m.init());
+} else {
+  state.subscribe(render);
+  bootstrap();
+}
