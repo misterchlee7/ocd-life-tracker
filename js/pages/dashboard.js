@@ -69,7 +69,7 @@ function render({ data, loading }) {
   const upcomingVesting = data.vesting
     .filter(v => v.status === 'upcoming' && v.date && daysFromToday(v.date) >= 0 && daysFromToday(v.date) <= 60)
     .sort((a, b) => a.date.localeCompare(b.date));
-  const upcomingVestingValue = upcomingVesting.reduce((a, v) => a + (v.gross_value || 0), 0);
+  const upcomingVestingShares = upcomingVesting.reduce((a, v) => a + (v.shares || 0), 0);
 
   // ── Attention items ──────────────────────────────────────────────────────
   const allItems = getAttentionItems(data);
@@ -91,7 +91,7 @@ function render({ data, loading }) {
   billsDueThisWeek.sort((a, b) => a.nextDate.localeCompare(b.nextDate));
 
   page.innerHTML = `
-    ${summaryHTML({ pendingMonth, monthlySubs, perksAvailable, upcomingVestingValue, upcomingVesting })}
+    ${summaryHTML({ pendingMonth, monthlySubs, perksAvailable, upcomingVestingShares, upcomingVesting })}
     ${attentionHubHTML(zone1, zone2)}
     <div class="dash-grid">
       ${vestingPanel({ upcomingVesting })}
@@ -101,7 +101,7 @@ function render({ data, loading }) {
 }
 
 // ── Summary cards row ─────────────────────────────────────────────────────────
-function summaryHTML({ pendingMonth, monthlySubs, perksAvailable, upcomingVestingValue, upcomingVesting }) {
+function summaryHTML({ pendingMonth, monthlySubs, perksAvailable, upcomingVestingShares, upcomingVesting }) {
   return `
     <div class="summary">
       <div class="card">
@@ -120,8 +120,8 @@ function summaryHTML({ pendingMonth, monthlySubs, perksAvailable, upcomingVestin
         <div class="sub">unclaimed this period</div>
       </div>
       <div class="card">
-        <div class="label">Vesting value (60d)</div>
-        <div class="value">${fmtMoney(upcomingVestingValue)}</div>
+        <div class="label">Vesting shares (60d)</div>
+        <div class="value">${upcomingVestingShares > 0 ? upcomingVestingShares.toLocaleString() + ' sh' : '—'}</div>
         <div class="sub">${upcomingVesting.length} event${upcomingVesting.length === 1 ? '' : 's'} upcoming</div>
       </div>
     </div>
