@@ -127,12 +127,11 @@ export function getAttentionItems(data) {
       const company = grant?.company || grant?.label || 'Vest';
       const when = days === 0 ? 'today' : `in ${days}d`;
       const shares = v.shares ? ` · ${v.shares} shares` : '';
-      const val = v.gross_value ? ` · $${Number(v.gross_value).toLocaleString()}` : '';
       items.push({
         zone: 1,
         kind: 'vesting_imminent',
         label: `${company} — vesting ${when}`,
-        detail: `${v.type?.toUpperCase() || 'RSU'}${shares}${val}`,
+        detail: `${v.type?.toUpperCase() || 'RSU'}${shares}`,
         link: 'vesting.html',
       });
     }

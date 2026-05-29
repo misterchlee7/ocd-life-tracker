@@ -98,6 +98,9 @@ export const state = {
     fn(_data);
     _data.updated_at = new Date().toISOString();
     if (!_guest) {
+      if (!_data.history) _data.history = [];
+      _data.history.push({ ts: _data.updated_at, label: label || 'edit' });
+      if (_data.history.length > 500) _data.history.splice(0, _data.history.length - 500);
       _dirty = true;
       cacheWrite(); // cacheWrite also guards on _guest, but belt-and-suspenders
     }

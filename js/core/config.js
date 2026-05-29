@@ -38,6 +38,7 @@ export function emptyData() {
     vesting: [],
     stock_prices: {},
     backlog: [],
+    history: [],
   };
 }
 
