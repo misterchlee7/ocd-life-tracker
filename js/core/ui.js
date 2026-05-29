@@ -409,16 +409,24 @@ export function showBottomSheet({ title, items = [], onClose } = {}) {
   const sheet = document.createElement('div');
   sheet.className = 'bottom-sheet';
 
+  // Escape all caller-supplied strings — bottom-sheet titles/labels/descriptions
+  // often come from user-edited fields (bill names, perk names, etc.). Without
+  // escaping, a malicious value would execute as HTML and could steal the PAT
+  // from localStorage.
+  const esc = s => String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
   let html = `<div class="bs-handle"></div>`;
-  if (title) html += `<div class="bs-title">${title}</div>`;
+  if (title) html += `<div class="bs-title">${esc(title)}</div>`;
   html += `<div class="bs-items">`;
   items.forEach((item, i) => {
     const cls = ['bs-item', item.danger ? 'danger' : ''].filter(Boolean).join(' ');
     html += `<button class="${cls}" data-idx="${i}" ${item.disabled ? 'disabled' : ''}>`;
-    if (item.icon) html += `<span class="bs-icon">${item.icon}</span>`;
+    if (item.icon) html += `<span class="bs-icon">${esc(item.icon)}</span>`;
     html += `<span class="bs-body">`;
-    html += `<span class="bs-label">${item.label}</span>`;
-    if (item.description) html += `<span class="bs-desc">${item.description}</span>`;
+    html += `<span class="bs-label">${esc(item.label)}</span>`;
+    if (item.description) html += `<span class="bs-desc">${esc(item.description)}</span>`;
     html += `</span></button>`;
   });
   html += `</div>`;
