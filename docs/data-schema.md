@@ -25,7 +25,8 @@ Canonical shape of `data.json` stored in the `ocd-life-tracker-data` repo. This 
   "vesting":       [ /* VestingEvent */ ],
   "stock_prices":  { /* ticker → price, e.g. "CSCO": 115.46 */ },
   "backlog":       [ /* BacklogItem */ ],
-  "warranties":    [ /* Warranty */ ]   // optional; accessed as data.warranties || []
+  "warranties":    [ /* Warranty */ ],  // optional; accessed as data.warranties || []
+  "history":       [ /* HistoryEntry — activity log */ ]
 }
 ```
 
@@ -275,6 +276,19 @@ Urgency tiers (based on days until `expiry_date`):
 - **≤ 30 days**: amber row background + red-outline badge ("Xd left")
 - **≤ 90 days**: amber-outline badge ("Xd left")
 - **Expired** (past date): faded row (opacity 0.55) + dark red "Expired" badge
+
+## `HistoryEntry`
+
+Appended by `state.mutate()` on every data change. Capped at 500 entries (oldest dropped first). Never written in guest/demo mode.
+
+```jsonc
+{
+  "ts": "2026-05-29T21:04:33.412Z",  // ISO timestamp of the mutation
+  "label": "mark paid"               // human-readable action label passed to state.mutate()
+}
+```
+
+Rendered in `history.html`, grouped by date, newest first. Read-only — never mutated directly by the UI.
 
 ## Migration notes
 

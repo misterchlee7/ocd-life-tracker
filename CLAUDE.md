@@ -33,6 +33,7 @@ Only 2 users (Chang + Kiju). Desktop-first for data entry; mobile has a dedicate
 ├── vesting.html            # tab: RSU/ESPP schedule
 ├── backlog.html            # tab: personal todos
 ├── warranties.html         # tab: product warranty tracker
+├── history.html            # meta: read-only activity log (accessible via ⏱ in topbar, not a nav tab)
 │
 ├── css/
 │   ├── app.css             # shared styles (extracted from mockups)
@@ -60,7 +61,8 @@ Only 2 users (Chang + Kiju). Desktop-first for data entry; mobile has a dedicate
 │       ├── backlog.js            # desktop; dynamically imports backlog-mobile.js on mobile
 │       ├── backlog-mobile.js     # mobile backlog: checkbox list, start/snooze/drop via bottom sheet
 │       ├── warranties.js         # desktop; dynamically imports warranties-mobile.js on mobile
-│       └── warranties-mobile.js  # mobile warranties: urgency-bordered cards, read-mostly
+│       ├── warranties-mobile.js  # mobile warranties: urgency-bordered cards, read-mostly
+│       └── history.js            # read-only activity log: entries grouped by date, newest first
 │
 ├── docs/
 │   ├── data-schema.md      # canonical JSON schema for data.json
@@ -232,6 +234,21 @@ Loaded on all pages via `<link>`. Sections:
 
 Note: `otl.cache` and `otl.sha` are explicitly purged by `state.exitGuestMode()` to prevent any stale or demo data from persisting after login.
 
+## Activity history log
+
+Every `state.mutate()` call appends `{ ts, label }` to `data.history` (rolling cap: 500 entries, oldest dropped first). Skipped in guest/demo mode — nothing is ever written to `data.history` while `_guest` is true.
+
+- **Storage:** inside `data.json` (persisted to GitHub with the rest of the data)
+- **Page:** `history.html` / `js/pages/history.js` — read-only, entries grouped by date, newest first
+- **Access:** ⏱ button in every page's topbar (between ↻ Refresh and ⚙)
+- **Undo behavior:** undoing an action removes its history entry (undo restores the pre-mutation snapshot, which didn't include that entry yet) — history reflects the actual committed data state
+
+## Security
+
+- **XSS:** `showBottomSheet()` in `ui.js` escapes all caller-supplied strings (`title`, `label`, `description`, `icon`) before injecting into `innerHTML`. Bill/perk/task names come from user-edited data and must never be injected raw.
+- **CSP:** every HTML page has `<meta http-equiv="Content-Security-Policy" ...>` restricting scripts to `'self'`, connections to `api.github.com` only, blocking plugins and external form targets.
+- **PAT:** stored in `localStorage` under `otl.pat`. Fine-grained, scoped to the data repo only. Rotate every 3–6 months. Never paste untrusted content (from email, web pages) directly into name/notes fields.
+
 ## Status
 
-All 7 pages (Dashboard, Bills, Perks, Subscriptions, Vesting, Backlog, Warranties) are fully functional on desktop. Bills, Perks, Subscriptions, Vesting, Backlog, and Warranties have dedicated mobile modules (card-based UI with bottom sheet actions). Dashboard renders fine on mobile with the shared topbar/nav. Demo/guest mode is live on all pages and viewports. Deployed at https://misterchlee7.github.io/ocd-life-tracker/.
+All 7 pages (Dashboard, Bills, Perks, Subscriptions, Vesting, Backlog, Warranties) are fully functional on desktop. Bills, Perks, Subscriptions, Vesting, Backlog, and Warranties have dedicated mobile modules (card-based UI with bottom sheet actions). Dashboard renders fine on mobile with the shared topbar/nav. Demo/guest mode is live on all pages and viewports. History log page is live. Deployed at https://misterchlee7.github.io/ocd-life-tracker/.
