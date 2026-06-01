@@ -533,13 +533,17 @@ export function positionMenu(menu, anchor) {
   menu.style.left     = 'auto';
   menu.style.right    = `${window.innerWidth - rect.right}px`;
   // Measure height after append — works because fixed elements render outside overflow containers
-  const menuH     = menu.offsetHeight;
-  const spaceBelow = window.innerHeight - rect.bottom - 4;
-  if (spaceBelow >= menuH || rect.top < menuH + 4) {
-    menu.style.top    = `${rect.bottom + 4}px`;
-    menu.style.bottom = 'auto';
+  const menuH      = menu.offsetHeight;
+  const spaceBelow = window.innerHeight - rect.bottom - 8;
+  const spaceAbove = rect.top - 8;
+  if (spaceBelow >= menuH || spaceBelow >= spaceAbove) {
+    menu.style.top       = `${rect.bottom + 4}px`;
+    menu.style.bottom    = 'auto';
+    menu.style.maxHeight = `${spaceBelow}px`;
   } else {
-    menu.style.top    = 'auto';
-    menu.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+    menu.style.top       = 'auto';
+    menu.style.bottom    = `${window.innerHeight - rect.top + 4}px`;
+    menu.style.maxHeight = `${spaceAbove}px`;
   }
+  menu.style.overflowY = 'auto';
 }
