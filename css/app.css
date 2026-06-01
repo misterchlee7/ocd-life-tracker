@@ -369,6 +369,7 @@ th.sorted .sort-icon { color: var(--accent); }
 .year-progress .seg.filled { background: #5aa36e; }
 .year-progress .seg.curr { box-shadow: 0 0 0 1.5px #b83c30; }
 .year-progress .seg.curr.filled { box-shadow: 0 0 0 1.5px #5aa36e; }
+.year-progress .seg.future { background: #f0f0f3; opacity: 0.5; }
 .year-progress .lbl { margin-left: 5px; }
 
 /* ---------- perk this-period cell ---------- */

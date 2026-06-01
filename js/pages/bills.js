@@ -1,6 +1,6 @@
 import { state, uid } from '../core/state.js';
 import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu } from '../core/ui.js';
-import { periodFor, todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
+import { periodFor, todayISO, shortDate, relativeDays, daysFromToday, nextOccurrence } from '../core/dates.js';
 import { paymentFor, yearProgress, rotation, needsConfirm } from '../core/derive.js';
 
 const page = document.getElementById('page');
@@ -345,9 +345,14 @@ function amountCell(bill, year) {
   if (yp) {
     const segs = [];
     for (let i = 0; i < yp.total; i++) {
-      segs.push(`<span class="seg ${i < yp.filled ? 'filled' : ''}"></span>`);
+      const paid   = i < yp.filled;
+      const curr   = i === yp.currentSegIdx;
+      const future = i > yp.currentSegIdx;
+      const cls = [paid ? 'filled' : '', curr ? 'curr' : '', future ? 'future' : ''].filter(Boolean).join(' ');
+      segs.push(`<span class="seg ${cls}"></span>`);
     }
-    sub = `<div class="cell-amount-sub">${FREQ_LABELS[bill.frequency] || ''} · ${yp.nextText || ''}</div>
+    const nextLabel = yp.nextText ? ` · Next: ${yp.nextText}` : '';
+    sub = `<div class="cell-amount-sub">${FREQ_LABELS[bill.frequency] || ''}${nextLabel}</div>
            <div class="year-progress"><span class="lbl">${year} · ${yp.filled}/${yp.total}</span>${segs.join('')}</div>`;
   }
   const balanceLine = bill.balance_remaining != null
@@ -356,13 +361,66 @@ function amountCell(bill, year) {
   return `<td class="num" data-sort="${bill.amount ?? 0}">${main}${sub}${balanceLine}</td>`;
 }
 
+// Returns the next expected due date for a non-monthly bill.
+// Uses the most recent scheduled_date from payment history as the cycle anchor
+// (e.g. last paid Sep 15 → next due Mar 15 for semi-annual), then advances
+// forward until the result is in the future.
+// Falls back to bill.next_due_date or nextOccurrence when no history exists.
+function nextDueDateForBill(data, bill) {
+  const STEP = { monthly: 1, bimonthly: 2, quarterly: 3, biannual: 6, semi_annual: 6, annual: 12 };
+  const step = STEP[bill.frequency];
+  if (!step) return bill.next_due_date || null;
+
+  const recent = data.payments
+    .filter(p => p.bill_id === bill.id && p.scheduled_date)
+    .sort((a, b) => b.scheduled_date.localeCompare(a.scheduled_date))[0];
+
+  if (recent) {
+    const d = new Date(recent.scheduled_date + 'T00:00:00');
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    // Advance by one step at a time until we're in the future
+    do { d.setMonth(d.getMonth() + step); } while (d <= today);
+    // Snap to bill.day, clamped to month length
+    if (bill.day) {
+      const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      d.setDate(Math.min(bill.day, maxDay));
+    }
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  return bill.next_due_date || nextOccurrence(bill.day, bill.frequency);
+}
+
 function yearProgressFromBill(bill, year) {
-  // only show for frequencies that partition a calendar year
+  // Only show for frequencies that partition a calendar year cleanly
   const total = { quarterly: 4, biannual: 2, semi_annual: 2, annual: 1 }[bill.frequency];
   if (!total) return null;
   const { data } = state.get();
   const yp = yearProgress(data, bill, year);
-  return yp;
+  if (!yp) return null;
+
+  // Which segment index (0-based) are we currently in for this year?
+  const todayYear = new Date().getFullYear();
+  const todayMonth = new Date().getMonth(); // 0-indexed
+  let currentSegIdx;
+  if (year > todayYear) {
+    currentSegIdx = -1;                           // viewing a future year — all segments future
+  } else if (year < todayYear) {
+    currentSegIdx = total;                         // viewing a past year — all segments past
+  } else if (bill.frequency === 'quarterly') {
+    currentSegIdx = Math.floor(todayMonth / 3);
+  } else if (bill.frequency === 'semi_annual' || bill.frequency === 'biannual') {
+    currentSegIdx = todayMonth < 6 ? 0 : 1;
+  } else {
+    currentSegIdx = 0;                             // annual: one segment, always current
+  }
+
+  // Next due date — uses payment history as cycle anchor for accuracy
+  const nextDate = (year === todayYear || year === todayYear + 1)
+    ? nextDueDateForBill(data, bill)
+    : null;
+
+  return { ...yp, currentSegIdx, nextText: nextDate ? shortDate(nextDate) : null };
 }
 
 function rotationCell(bill) {
