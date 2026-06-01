@@ -297,6 +297,27 @@ function thSortable(key, label, extra = '') {
   return `<th class="sortable ${active ? 'sorted' : ''} ${extra}" data-sort="${key}">${label} <span class="sort-icon">${arrow}</span></th>`;
 }
 
+// For non-monthly bills, returns a small muted label showing which period window
+// the status applies to (e.g. "Jan–Jun" for H1, "Q2 · Apr–Jun" for quarterly).
+// Returns empty string for monthly/bimonthly so no label is shown.
+function periodRangeLabel(freq, period) {
+  if (!freq || !period || freq === 'monthly' || freq === 'bimonthly') return '';
+  const H_RANGES  = { '1': 'Jan–Jun', '2': 'Jul–Dec' };
+  const Q_RANGES  = { '1': 'Jan–Mar', '2': 'Apr–Jun', '3': 'Jul–Sep', '4': 'Oct–Dec' };
+  let text = '';
+  if (period.includes('-H')) {
+    const h = period.split('-H')[1];
+    text = H_RANGES[h] || period;
+  } else if (period.includes('-Q')) {
+    const q = period.split('-Q')[1];
+    text = `Q${q} · ${Q_RANGES[q] || ''}`;
+  } else {
+    // annual / multi-year: period is just the year string
+    text = `Full year ${period}`;
+  }
+  return `<div class="cell-amount-sub period-range">${text}</div>`;
+}
+
 function statusPill(status, payment, bill) {
   let label = STATUS_LABELS[status] || status;
   // show paid month only when the payment was recorded 2+ months away from the viewed month
@@ -405,7 +426,7 @@ function tableHTML(data) {
       prefix = dividerRow();
       dividerInserted = true;
     }
-    const { status, payment } = statusForRow(data, b);
+    const { status, payment, period } = statusForRow(data, b);
     // Payment cell: shows paid_amount (green) when paid, pending_amount otherwise
     const paymentCell = (() => {
       if (status === 'paid' && payment?.paid_amount != null) {
@@ -431,7 +452,7 @@ function tableHTML(data) {
       <td data-sort="${escapeAttr(b.brand + ' ' + b.name)}"><b>${escape(b.brand)}</b> — ${escape(b.name)} ${typePill}${aprBadge(b)}${dueBadge(b)}${noteLine}</td>
       <td class="tight" data-sort="${b.who || ''}">${whoPill(b.who)}</td>
       ${amountCell(b, year)}
-      <td class="tight" data-sort="${status}">${statusPill(status, payment, b)}</td>
+      <td class="tight" data-sort="${status}">${statusPill(status, payment, b)}${periodRangeLabel(b.frequency, period)}</td>
       ${paymentCell}
       ${rewards}
       ${rotationCell(b)}

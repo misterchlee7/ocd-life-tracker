@@ -658,6 +658,7 @@ tr.row-selected td { background: #f0f4ff; }
 .row-flex { display: flex; align-items: center; gap: 8px; }
 .spacer { flex: 1; }
 .cell-amount-sub { font-size: 11px; color: var(--text-muted); }
+.period-range { margin-top: 2px; }
 .renewal-due   { color: #b83c30; font-weight: 600; }
 .renewal-due   .cell-amount-sub { color: #b83c30; opacity: 0.8; }
 .renewal-soon  { color: #a4670c; font-weight: 500; }
