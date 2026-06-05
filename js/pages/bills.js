@@ -354,7 +354,7 @@ function amountCell(bill, year) {
       const cls = [paid ? 'filled' : '', curr ? 'curr' : '', future ? 'future' : ''].filter(Boolean).join(' ');
       segs.push(`<span class="seg ${cls}"></span>`);
     }
-    const nextLabel = yp.nextText ? ` · Next: ${yp.nextText}` : '';
+    const nextLabel = yp.nextText && !bill.due_date ? ` · Next: ${yp.nextText}` : '';
     sub = `<div class="cell-amount-sub">${FREQ_LABELS[bill.frequency] || ''}${nextLabel}</div>
            <div class="year-progress"><span class="lbl">${year} · ${yp.filled}/${yp.total}</span>${segs.join('')}</div>`;
   }
