@@ -486,7 +486,7 @@ function wireInteractions() {
         state.mutate(d => {
           const s = d.subscriptions.find(x => x.id === subId);
           if (s) s.status = val;
-        }, `set status ${sub.name}`);
+        }, `set status: ${sub.name} → ${val}`);
       });
       select.addEventListener('blur', () => render(state.get()));
       select.addEventListener('keydown', (e) => {
@@ -518,7 +518,7 @@ function wireInteractions() {
         state.mutate(d => {
           const s = d.subscriptions.find(x => x.id === subId);
           if (s) s.category = select.value;
-        }, `set category ${sub.name}`);
+        }, `set category: ${sub.name} → ${select.value}`);
       });
       select.addEventListener('blur', () => render(state.get()));
       select.addEventListener('keydown', (e) => { if (e.key === 'Escape') render(state.get()); });
@@ -553,7 +553,7 @@ function wireInteractions() {
           state.mutate(d => {
             const s = d.subscriptions.find(x => x.id === subId);
             if (s) s.subsidized_amount = val;
-          }, `edit subsidy amount ${sub.name}`);
+          }, `edit subsidy amount: ${sub.name}${val != null ? ` → $${val}` : ''}`);
         } else {
           render(state.get());
         }
@@ -589,7 +589,7 @@ function wireInteractions() {
           state.mutate(d => {
             const s = d.subscriptions.find(x => x.id === subId);
             if (s) s.billed_to = val;
-          }, `edit subsidized by ${sub.name}`);
+          }, `edit subsidized by: ${sub.name}${val ? ` → ${val}` : ''}`);
         } else {
           render(state.get());
         }
@@ -624,7 +624,7 @@ function wireInteractions() {
           state.mutate(d => {
             const s = d.subscriptions.find(x => x.id === subId);
             if (s) s.notes = val;
-          }, `edit note ${sub.name}`);
+          }, `edit note: ${sub.name}`);
         } else {
           render(state.get());
         }
@@ -751,7 +751,7 @@ function openSubForm(existing) {
       } else {
         d.subscriptions.push({ ...s, ...patch });
       }
-    }, isEdit ? `edit sub ${patch.name}` : `add sub ${patch.name}`);
+    }, isEdit ? `edit subscription: ${patch.name}` : `add subscription: ${patch.name}`);
 
     el.remove();
     toast(isEdit ? `Updated: ${patch.name}` : `Added: ${patch.name}`, 'success');

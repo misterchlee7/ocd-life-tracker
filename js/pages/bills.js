@@ -660,7 +660,7 @@ function wireInteractions(data) {
       state.mutate(d => {
         d.bills = d.bills.filter(x => x.id !== id);
         d.payments = d.payments.filter(x => x.bill_id !== id);
-      }, `delete ${bill.name}`);
+      }, `delete bill: ${bill.brand} — ${bill.name}`);
       toast(`Deleted: ${bill.brand} — ${bill.name}`, 'info');
     });
   });
@@ -698,7 +698,7 @@ function wireInteractions(data) {
       const commit = () => {
         const val = input.value.trim();
         if (val !== (bill.notes || '').trim()) {
-          state.mutate(d => { const b = d.bills.find(x => x.id === billId); if (b) b.notes = val || ''; }, 'edit note');
+          state.mutate(d => { const b = d.bills.find(x => x.id === billId); if (b) b.notes = val || ''; }, `edit note: ${bill.brand} — ${bill.name}`);
         } else {
           render(state.get()); // just re-render to restore display
         }
@@ -765,7 +765,7 @@ function wireInteractions(data) {
             if (!b.cc) b.cc = {};
             b.cc.rewards_balance = val;
             b.cc.rewards_unit = unit;
-          }, 'edit rewards');
+          }, `edit rewards: ${bill.brand} — ${bill.name}`);
         } else {
           render(state.get());
         }
@@ -861,26 +861,26 @@ function handleMenuAction(billId, act) {
         const b = d.bills.find(x => x.id === bill.id);
         if (!b.cc) b.cc = {};
         b.cc.last_used = todayISO();
-      }, 'mark card used');
+      }, `mark card used: ${bill.brand} ${bill.name}`);
       toast(`${bill.brand} ${bill.name} marked used today`, 'success');
       break;
     case 'archive':
       state.mutate(d => {
         const b = d.bills.find(x => x.id === bill.id);
         b.archived = !b.archived;
-      }, 'toggle archive');
+      }, `${bill.archived ? 'unarchive' : 'archive'}: ${bill.brand} — ${bill.name}`);
       break;
     case 'delete':
       if (!confirm(`Delete ${bill.brand} — ${bill.name}? This also removes its payment history.`)) return;
       state.mutate(d => {
         d.bills = d.bills.filter(x => x.id !== bill.id);
         d.payments = d.payments.filter(p => p.bill_id !== bill.id);
-      }, 'delete bill');
+      }, `delete bill: ${bill.brand} — ${bill.name}`);
       break;
     case 'delete-payment':
       state.mutate(d => {
         d.payments = d.payments.filter(p => !(p.bill_id === bill.id && p.period === period));
-      }, 'clear payment record');
+      }, `clear payment: ${bill.brand} — ${bill.name}`);
       break;
   }
 }
@@ -911,7 +911,7 @@ function cycleStatus(billId) {
     if (confirm(`Reset ${bill.brand} ${bill.name} for ${monthLabel(ui.month)}? This deletes the payment record.`)) {
       state.mutate(d => {
         d.payments = d.payments.filter(p => p.id !== existing.id);
-      }, 'reset payment');
+      }, `reset payment: ${bill.brand} ${bill.name}`);
     }
   }
 }
@@ -1060,7 +1060,7 @@ function promptPendingAmount(bill, period) {
             scheduled_date: scheduledDate, paid_date: null, marker: '', notes: '',
           });
         }
-      }, 'set pending amount');
+      }, `schedule: ${bill.brand} — ${bill.name} $${amt}`);
     },
   });
 }
@@ -1096,7 +1096,7 @@ function markPaid(bill, period) {
         if (b?.cc?.apr_zero?.months_left > 0) b.cc.apr_zero.months_left -= 1;
         // update last_used for CC (only when amount > 0 — $0 payments aren't real usage)
         if (b?.cc && amt > 0) b.cc.last_used = todayISO();
-      }, 'mark paid');
+      }, `mark paid: ${bill.brand} — ${bill.name} $${amt}`);
     },
   });
 }
@@ -1117,7 +1117,7 @@ function skipPayment(bill, period) {
         paid_date: todayISO(), marker: '', notes: '',
       });
     }
-  }, 'no payment');
+  }, `no payment: ${bill.brand} — ${bill.name}`);
   toast('marked — no payment this month', 'info');
 }
 
@@ -1284,7 +1284,7 @@ function openBillForm(existing) {
       } else {
         d.bills.push(newBill);
       }
-    }, isEdit ? 'edit bill' : 'add bill');
+    }, isEdit ? `edit bill: ${brand} — ${name}` : `add bill: ${brand} — ${name}`);
 
     backdrop.remove();
     toast(isEdit ? `Updated: ${brand} — ${name}` : `Added: ${brand} — ${name}`, 'success');

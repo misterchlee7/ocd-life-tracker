@@ -201,7 +201,7 @@ function markVested(eventId) {
   const { data } = state.get();
   const v = data.vesting.find(x => x.id === eventId);
   if (!v) return;
-  state.mutate(d => { const e = d.vesting.find(x => x.id === eventId); if (e) e.status = 'vested'; }, 'mark vested');
+  state.mutate(d => { const e = d.vesting.find(x => x.id === eventId); if (e) e.status = 'vested'; }, `mark vested: ${v.date ? shortDate(v.date) : 'event'}${v.shares ? ` (${v.shares} shares)` : ''}`);
   toast(`Vested: ${v.date ? shortDate(v.date) : 'event'}`, 'success');
 }
 
@@ -238,7 +238,7 @@ function openSoldModal(eventId) {
     state.mutate(d => {
       const e = d.vesting.find(x => x.id === eventId);
       if (e) { e.status = 'sold'; e.sold_amount = n; e.sold_date = todayISO(); }
-    }, 'mark sold');
+    }, `mark sold: ${v.date ? shortDate(v.date) : 'event'} $${n}`);
     backdrop.remove();
     toast(`Sold: ${v.date ? shortDate(v.date) : 'event'}`, 'success');
   };

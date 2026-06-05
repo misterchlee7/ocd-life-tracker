@@ -219,12 +219,13 @@ function wireInteractions(data) {
   // Done checkboxes
   page.querySelectorAll('[data-check]').forEach(chk => {
     chk.addEventListener('change', () => {
+      const task = state.get().data?.backlog.find(x => x.id === chk.dataset.check);
       state.mutate(d => {
         const t = d.backlog.find(x => x.id === chk.dataset.check);
         if (!t) return;
         if (chk.checked) { t.status = 'done'; t.done_date = todayISO(); }
         else { t.status = 'open'; t.done_date = null; }
-      }, 'toggle task');
+      }, chk.checked ? `done task: ${task?.title}` : `reopen task: ${task?.title}`);
     });
   });
 
@@ -335,13 +336,13 @@ function handleMenuAction(id, act) {
   switch (act) {
     case 'edit': openTaskForm(t); break;
     case 'start':
-      state.mutate(d => { const x = d.backlog.find(y => y.id === id); if (x) x.status = 'in_progress'; }, 'start task');
+      state.mutate(d => { const x = d.backlog.find(y => y.id === id); if (x) x.status = 'in_progress'; }, `start task: ${t.title}`);
       break;
     case 'done':
       state.mutate(d => {
         const x = d.backlog.find(y => y.id === id);
         if (x) { x.status = 'done'; x.done_date = todayISO(); }
-      }, 'done task');
+      }, `done task: ${t.title}`);
       toast(`Done: ${t.title}`, 'success');
       break;
     case 'snooze': {
@@ -350,7 +351,7 @@ function handleMenuAction(id, act) {
       state.mutate(d => {
         const x = d.backlog.find(y => y.id === id);
         if (x) { x.status = 'snoozed'; x.snoozed_until = until; }
-      }, 'snooze task');
+      }, `snooze task: ${t.title} until ${until}`);
       toast(`Snoozed: ${t.title}`, 'info');
       break;
     }
@@ -358,14 +359,14 @@ function handleMenuAction(id, act) {
       state.mutate(d => {
         const x = d.backlog.find(y => y.id === id);
         if (x) { x.status = 'open'; x.done_date = null; x.snoozed_until = null; }
-      }, 'reopen task');
+      }, `reopen task: ${t.title}`);
       break;
     case 'drop':
-      state.mutate(d => { const x = d.backlog.find(y => y.id === id); if (x) x.status = 'dropped'; }, 'drop task');
+      state.mutate(d => { const x = d.backlog.find(y => y.id === id); if (x) x.status = 'dropped'; }, `drop task: ${t.title}`);
       break;
     case 'delete':
       if (!confirm(`Delete "${t.title}"?`)) return;
-      state.mutate(d => { d.backlog = d.backlog.filter(x => x.id !== id); }, 'delete task');
+      state.mutate(d => { d.backlog = d.backlog.filter(x => x.id !== id); }, `delete task: ${t.title}`);
       toast(`Deleted: ${t.title}`, 'info');
       break;
   }
@@ -432,7 +433,7 @@ function openTaskForm(existing, defaultCat = 'do') {
       } else {
         d.backlog.push({ ...t, ...patch });
       }
-    }, isEdit ? 'edit task' : 'add task');
+    }, isEdit ? `edit task: ${patch.title}` : `add task: ${patch.title}`);
     el.remove();
     toast(isEdit ? `Updated: ${patch.title}` : `Added: ${patch.title}`, 'success');
   };

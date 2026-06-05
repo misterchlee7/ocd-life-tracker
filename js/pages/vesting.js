@@ -399,7 +399,7 @@ function wireInteractions(data) {
       const v = state.get().data?.vesting.find(x => x.id === id);
       if (!v) return;
       if (!confirm('Delete this vesting event?')) return;
-      state.mutate(d => { d.vesting = d.vesting.filter(x => x.id !== id); }, 'delete event');
+      state.mutate(d => { d.vesting = d.vesting.filter(x => x.id !== id); }, `delete event: ${v.date ? shortDate(v.date) : 'event'}${v.shares ? ` (${v.shares} shares)` : ''}`);
       toast(`Deleted: ${v.date ? shortDate(v.date) : 'event'}`, 'info');
     });
   });
@@ -500,7 +500,7 @@ function wireInteractions(data) {
       const g = state.get().data?.grants.find(x => x.id === grantId);
       if (!g) return;
       inlineText(td, g.company, 'e.g. Cisco', val => {
-        state.mutate(d => { const gr = d.grants.find(x => x.id === grantId); if (gr) gr.company = val; }, 'edit company');
+        state.mutate(d => { const gr = d.grants.find(x => x.id === grantId); if (gr) gr.company = val; }, `edit company: ${g.label} → ${val}`);
       });
     });
   });
@@ -513,7 +513,7 @@ function wireInteractions(data) {
       const g = state.get().data?.grants.find(x => x.id === grantId);
       if (!g) return;
       inlineText(td, g.broker, 'e.g. E*Trade', val => {
-        state.mutate(d => { const gr = d.grants.find(x => x.id === grantId); if (gr) gr.broker = val; }, 'edit broker');
+        state.mutate(d => { const gr = d.grants.find(x => x.id === grantId); if (gr) gr.broker = val; }, `edit broker: ${g.label} → ${val}`);
       });
     });
   });
@@ -525,7 +525,7 @@ function wireInteractions(data) {
       const v = state.get().data?.vesting.find(x => x.id === id);
       if (!v) return;
       inlineSelect(td, GRANT_TYPES.map(t => [t, GRANT_TYPE_LABELS[t]]), v.type, val => {
-        state.mutate(d => { const ev = d.vesting.find(x => x.id === id); if (ev) ev.type = val; }, 'edit type');
+        state.mutate(d => { const ev = d.vesting.find(x => x.id === id); if (ev) ev.type = val; }, `edit type: ${v.date ? shortDate(v.date) : 'event'} → ${val}`);
       });
     });
   });
@@ -537,7 +537,7 @@ function wireInteractions(data) {
       const v = state.get().data?.vesting.find(x => x.id === id);
       if (!v) return;
       inlineSelect(td, [['chang','Chang'],['kiju','Kiju'],['joint','Joint']], v.who, val => {
-        state.mutate(d => { const ev = d.vesting.find(x => x.id === id); if (ev) ev.who = val; }, 'edit who');
+        state.mutate(d => { const ev = d.vesting.find(x => x.id === id); if (ev) ev.who = val; }, `edit who: ${v.date ? shortDate(v.date) : 'event'} → ${val}`);
       });
     });
   });
@@ -549,7 +549,7 @@ function wireInteractions(data) {
       const v = state.get().data?.vesting.find(x => x.id === id);
       if (!v) return;
       inlineNumber(td, v.shares, val => {
-        if (val !== v.shares) state.mutate(d => { const ev = d.vesting.find(x => x.id === id); if (ev) ev.shares = val; }, 'edit shares');
+        if (val !== v.shares) state.mutate(d => { const ev = d.vesting.find(x => x.id === id); if (ev) ev.shares = val; }, `edit shares: ${v.date ? shortDate(v.date) : 'event'} → ${val}`);
         else render(state.get());
       });
     });
@@ -563,7 +563,7 @@ function wireInteractions(data) {
       const v = snap.data?.vesting.find(x => x.id === id);
       if (!v || isAutoValue(v, snap.data)) return;
       inlineNumber(td, v.gross_value, val => {
-        if (val !== v.gross_value) state.mutate(d => { const ev = d.vesting.find(x => x.id === id); if (ev) ev.gross_value = val; }, 'edit gross value');
+        if (val !== v.gross_value) state.mutate(d => { const ev = d.vesting.find(x => x.id === id); if (ev) ev.gross_value = val; }, `edit gross value: ${v.date ? shortDate(v.date) : 'event'} → $${val}`);
         else render(state.get());
       });
     });
@@ -613,7 +613,7 @@ function handleEventAction(id, act) {
   switch (act) {
     case 'edit': openEventForm(v); break;
     case 'vest':
-      state.mutate(d => { const e = d.vesting.find(x => x.id === id); if (e) e.status = 'vested'; }, 'mark vested');
+      state.mutate(d => { const e = d.vesting.find(x => x.id === id); if (e) e.status = 'vested'; }, `mark vested: ${v.date ? shortDate(v.date) : 'event'}${v.shares ? ` (${v.shares} shares)` : ''}`);
       toast(`Vested: ${v.date ? shortDate(v.date) : 'event'}`, 'success');
       break;
     case 'sold': {
@@ -624,13 +624,13 @@ function handleEventAction(id, act) {
       state.mutate(d => {
         const e = d.vesting.find(x => x.id === id);
         if (e) { e.status = 'sold'; e.sold_amount = n; e.sold_date = todayISO(); }
-      }, 'mark sold');
+      }, `mark sold: ${v.date ? shortDate(v.date) : 'event'} $${n}`);
       toast(`Sold: ${v.date ? shortDate(v.date) : 'event'}`, 'success');
       break;
     }
     case 'delete':
       if (!confirm('Delete this vesting event?')) return;
-      state.mutate(d => { d.vesting = d.vesting.filter(x => x.id !== id); }, 'delete event');
+      state.mutate(d => { d.vesting = d.vesting.filter(x => x.id !== id); }, `delete event: ${v.date ? shortDate(v.date) : 'event'}${v.shares ? ` (${v.shares} shares)` : ''}`);
       toast(`Deleted: ${v.date ? shortDate(v.date) : 'event'}`, 'info');
       break;
   }
@@ -729,7 +729,7 @@ function openGrantsModal() {
         state.mutate(d => {
           d.grants = d.grants.filter(x => x.id !== gId);
           d.vesting = d.vesting.filter(x => x.grant_id !== gId);
-        }, 'delete grant');
+        }, `delete grant: ${g.label}`);
         toast(`Deleted grant: ${g.label}`, 'info');
         backdrop.innerHTML = buildHTML();
         rewire();
@@ -817,7 +817,7 @@ function openEventForm(existing) {
       } else {
         d.vesting.push({ ...v, ...patch });
       }
-    }, isEdit ? 'edit event' : 'add event');
+    }, isEdit ? `edit event: ${patch.date ? shortDate(patch.date) : 'event'}` : `add event: ${patch.date ? shortDate(patch.date) : 'event'}`);
     el.remove();
     toast(isEdit ? `Updated: ${patch.date ? shortDate(patch.date) : 'event'}` : `Added: ${patch.date ? shortDate(patch.date) : 'event'}`, 'success');
   };
@@ -887,7 +887,7 @@ function openGrantForm(existing, onSaved) {
       } else {
         d.grants.push({ ...g, ...patch });
       }
-    }, isEdit ? 'edit grant' : 'add grant');
+    }, isEdit ? `edit grant: ${patch.label}` : `add grant: ${patch.label}`);
     el.remove();
     toast(isEdit ? `Updated grant: ${patch.label}` : `Added grant: ${patch.label}`, 'success');
     onSaved?.();

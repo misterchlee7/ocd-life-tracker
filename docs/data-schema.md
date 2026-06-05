@@ -284,9 +284,17 @@ Appended by `state.mutate()` on every data change. Capped at 500 entries (oldest
 ```jsonc
 {
   "ts": "2026-05-29T21:04:33.412Z",  // ISO timestamp of the mutation
-  "label": "mark paid"               // human-readable action label passed to state.mutate()
+  "label": "mark paid: Chase — Rent $1200"  // human-readable action label passed to state.mutate()
 }
 ```
+
+Label format convention: `action: subject [→ value]`, e.g.:
+- Bills: `mark paid: Chase — Rent $1200`, `schedule: Amex — Gold $0`, `no payment: PNC — Mortgage`, `edit note: Chase — Rent`
+- Perks: `claimed perk: Dining Credit`, `skip perk: Travel Credit`
+- Subscriptions: `set status: Netflix → cancelled`, `advance Netflix`, `add subscription: Spotify`
+- Backlog: `done task: Replace kitchen faucet`, `snooze task: Fix gutters until 2026-06-07`
+- Vesting: `mark vested: Jun 15, 2026 (50 shares)`, `mark sold: Jun 15, 2026 $5000`
+- Warranties: `edit brand: Samsung 65" TV`, `archive: Dyson V11`
 
 Rendered in `history.html`, grouped by date, newest first. Read-only — never mutated directly by the UI.
 

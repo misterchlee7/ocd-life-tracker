@@ -260,7 +260,7 @@ function cyclePerk(perkId) {
     } else {
       d.perk_claims.push({ id: uid(), perk_id: perkId, period, status: next, claimed_date: next === 'claimed' ? todayISO() : null, notes: '' });
     }
-  }, `cycle perk ${perk.name}`);
+  }, `${next} perk: ${perk.name}`);
 }
 
 function openPerkSheet(perkId) {

@@ -548,7 +548,7 @@ function cycleStatus(perkId) {
         notes: '',
       });
     }
-  }, `cycle perk ${perk.name}`);
+  }, `${next} perk: ${perk.name}`);
 }
 
 function handleMenuAction(id, act) {

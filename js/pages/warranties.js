@@ -328,7 +328,7 @@ function wireInteractions(data) {
             state.mutate(d => {
               const w = (d.warranties || []).find(x => x.id === id);
               if (w) w[field] = val;
-            }, `edit ${field}`);
+            }, `edit ${field}: ${item.name}`);
           } else { render(state.get()); }
         }
         input.addEventListener('blur', commit);
@@ -367,7 +367,7 @@ function wireInteractions(data) {
         state.mutate(d => {
           const item = (d.warranties || []).find(x => x.id === id);
           if (item) item.category = select.value;
-        }, `edit category`);
+        }, `edit category: ${w.name} → ${select.value}`);
       });
       select.addEventListener('blur', () => render(state.get()));
       select.addEventListener('keydown', (e) => { if (e.key === 'Escape') render(state.get()); });
@@ -384,7 +384,7 @@ function handleMenuAction(id, act) {
       state.mutate(d => {
         const item = (d.warranties || []).find(x => x.id === id);
         if (item) item.archived = !item.archived;
-      }, `archive ${w.name}`);
+      }, `${w.archived ? 'unarchive' : 'archive'}: ${w.name}`);
       render(state.get());
       break;
     case 'delete':

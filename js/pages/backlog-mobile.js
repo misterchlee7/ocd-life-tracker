@@ -158,12 +158,13 @@ function wireInteractions(data) {
   page.querySelectorAll('[data-check]').forEach(chk => {
     chk.addEventListener('change', () => {
       const id = chk.dataset.check;
+      const task = data.backlog.find(x => x.id === id);
       state.mutate(d => {
         const t = d.backlog.find(x => x.id === id);
         if (!t) return;
         if (chk.checked) { t.status = 'done'; t.done_date = todayISO(); }
         else { t.status = 'open'; t.done_date = null; }
-      }, 'toggle task');
+      }, chk.checked ? `done task: ${task?.title}` : `reopen task: ${task?.title}`);
       if (chk.checked) toast('Done ✓', 'success');
     });
   });
@@ -187,7 +188,7 @@ function openTaskSheet(taskId) {
       task.status !== 'in_progress' && !isDone(task) ? {
         icon: '▶️', label: 'Start (in progress)',
         action: () => {
-          state.mutate(d => { const t = d.backlog.find(x => x.id === taskId); if (t) t.status = 'in_progress'; }, 'start task');
+          state.mutate(d => { const t = d.backlog.find(x => x.id === taskId); if (t) t.status = 'in_progress'; }, `start task: ${task.title}`);
         },
       } : null,
       task.status !== 'done' ? {
@@ -196,7 +197,7 @@ function openTaskSheet(taskId) {
           state.mutate(d => {
             const t = d.backlog.find(x => x.id === taskId);
             if (t) { t.status = 'done'; t.done_date = todayISO(); }
-          }, 'done task');
+          }, `done task: ${task.title}`);
           toast(`Done: ${task.title}`, 'success');
         },
       } : null,
@@ -207,7 +208,7 @@ function openTaskSheet(taskId) {
           state.mutate(d => {
             const t = d.backlog.find(x => x.id === taskId);
             if (t) { t.status = 'snoozed'; t.snoozed_until = until; }
-          }, 'snooze task');
+          }, `snooze task: ${task.title}`);
           toast(`Snoozed: ${task.title}`, 'info');
         },
       },
@@ -217,13 +218,13 @@ function openTaskSheet(taskId) {
           state.mutate(d => {
             const t = d.backlog.find(x => x.id === taskId);
             if (t) { t.status = 'open'; t.done_date = null; t.snoozed_until = null; }
-          }, 'reopen task');
+          }, `reopen task: ${task.title}`);
         },
       } : null,
       {
         icon: '🚫', label: 'Drop', danger: true,
         action: () => {
-          state.mutate(d => { const t = d.backlog.find(x => x.id === taskId); if (t) t.status = 'dropped'; }, 'drop task');
+          state.mutate(d => { const t = d.backlog.find(x => x.id === taskId); if (t) t.status = 'dropped'; }, `drop task: ${task.title}`);
         },
       },
     ].filter(Boolean),

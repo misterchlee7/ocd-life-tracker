@@ -242,6 +242,7 @@ Every `state.mutate()` call appends `{ ts, label }` to `data.history` (rolling c
 - **Page:** `history.html` / `js/pages/history.js` — read-only, entries grouped by date, newest first
 - **Access:** ⏱ button in every page's topbar (between ↻ Refresh and ⚙)
 - **Undo behavior:** undoing an action removes its history entry (undo restores the pre-mutation snapshot, which didn't include that entry yet) — history reflects the actual committed data state
+- **Label convention:** labels follow `action: subject [→ value]` — e.g. `mark paid: Chase — Rent $1200`, `set status: Netflix → cancelled`, `snooze task: Fix gutters until 2026-06-07`. Always include the item name and any relevant value so the history log is self-explanatory without needing to cross-reference the data.
 
 ## Security
 

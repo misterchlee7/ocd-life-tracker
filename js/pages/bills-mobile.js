@@ -326,7 +326,7 @@ function openBillSheet(billId) {
             state.mutate(d => {
               const p = d.payments.find(x => x.bill_id === bill.id && x.period === period);
               if (p) p.paid_amount = amt;
-            }, `edit paid amount ${bill.brand}`);
+            }, `edit paid amount: ${bill.brand} — ${bill.name} → $${amt}`);
             toast(`Updated: ${bill.brand} — ${bill.name}`, 'success');
           },
         });
@@ -341,7 +341,7 @@ function openBillSheet(billId) {
           const b = d.bills.find(x => x.id === bill.id);
           if (!b.cc) b.cc = {};
           b.cc.last_used = todayISO();
-        }, 'mark card used');
+        }, `mark card used: ${bill.brand} ${bill.name}`);
         toast(`${bill.brand} marked used today`, 'success');
       },
     }] : []),
@@ -354,7 +354,7 @@ function openBillSheet(billId) {
           d.payments = d.payments.filter(
             p => !(p.bill_id === bill.id && p.period === period)
           );
-        }, 'clear payment record');
+        }, `clear payment: ${bill.brand} — ${bill.name}`);
         toast(`Payment cleared: ${bill.brand} — ${bill.name}`, 'info');
       },
     }] : []),
@@ -443,7 +443,7 @@ function promptPendingAmount(bill, period) {
             scheduled_date: scheduledDate, paid_date: null, marker: '', notes: '',
           });
         }
-      }, 'set pending amount');
+      }, `schedule: ${bill.brand} — ${bill.name} $${amt}`);
       toast(`Scheduled: ${bill.brand} — ${bill.name}`, 'success');
     },
   });
@@ -479,7 +479,7 @@ function markPaid(bill, period) {
         if (b?.cc?.apr_zero?.months_left > 0) b.cc.apr_zero.months_left -= 1;
         // update CC last_used (skip $0 payments — not real usage)
         if (b?.cc && amt > 0) b.cc.last_used = todayISO();
-      }, 'mark paid');
+      }, `mark paid: ${bill.brand} — ${bill.name} $${amt}`);
       toast(`Paid: ${bill.brand} — ${bill.name}`, 'success');
     },
   });
@@ -501,7 +501,7 @@ function skipPayment(bill, period) {
         paid_date: todayISO(), marker: '', notes: '',
       });
     }
-  }, 'no payment');
+  }, `no payment: ${bill.brand} — ${bill.name}`);
   toast('Marked — no payment this month', 'info');
 }
 
