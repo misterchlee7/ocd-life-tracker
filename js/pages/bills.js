@@ -166,6 +166,7 @@ function summaryHTML(data) {
   let needsConfirmCount = 0, needsConfirmAmt = 0;
   let rewardsDollars = 0, rewardsDollarCards = 0;
   let rewardsPoints = 0, rewardsPointCards = 0;
+  let totalCCLimit = 0;
   const typeCounts = {};
 
   for (const b of filtered) {
@@ -194,6 +195,7 @@ function summaryHTML(data) {
     // type breakdown
     const t = b.type || 'other';
     typeCounts[t] = (typeCounts[t] || 0) + 1;
+    if (b.cc?.credit_limit > 0) totalCCLimit += b.cc.credit_limit;
   }
 
   const pendingWhoSub = [['chang', 'Chang'], ['kiju', 'Kiju'], ['joint', 'Joint']]
@@ -250,6 +252,7 @@ function summaryHTML(data) {
         <div class="label">Bill breakdown</div>
         <div class="value">${totalBills}</div>
         <div class="sub">${typeBreakdown || '&nbsp;'}</div>
+        ${totalCCLimit > 0 ? `<div class="sub" style="margin-top:2px;font-size:11px;opacity:0.75">CC limit: ${fmtMoney(totalCCLimit)} total</div>` : ''}
       </div>
     </div>
   `;
@@ -1194,6 +1197,9 @@ function openBillForm(existing) {
           <label class="field"><span>Last used date</span>
             <input id="f-lastused" type="date" value="${cc.last_used || ''}" />
           </label>
+          <label class="field"><span>Credit limit</span>
+            <input id="f-credit-limit" type="number" min="0" step="0.01" placeholder="e.g. 10000" value="${cc.credit_limit ?? ''}" />
+          </label>
           <label class="field"><span>Rewards balance</span>
             <div class="input-with-unit">
               <input id="f-rewards" type="number" min="0" step="0.01" value="${cc.rewards_balance ?? ''}" />
@@ -1240,6 +1246,7 @@ function openBillForm(existing) {
     const balanceRaw = backdrop.querySelector('#f-balance').value;
     const dueDate = backdrop.querySelector('#f-due-date').value;
     const lastUsed = backdrop.querySelector('#f-lastused').value;
+    const creditLimitRaw = backdrop.querySelector('#f-credit-limit').value;
     const rewardsRaw = backdrop.querySelector('#f-rewards').value;
     const rewardsUnit = backdrop.querySelector('#f-rewards-unit').value;
     const aprDate = backdrop.querySelector('#f-apr-date').value;
@@ -1261,10 +1268,11 @@ function openBillForm(existing) {
       archived: existing?.archived || false,
     };
 
-    const hasCC = lastUsed || rewardsRaw !== '' || aprDate || aprMonthsRaw !== '' || aprBalRaw !== '';
+    const hasCC = lastUsed || creditLimitRaw !== '' || rewardsRaw !== '' || aprDate || aprMonthsRaw !== '' || aprBalRaw !== '';
     if (hasCC || existing?.cc) {
       newBill.cc = {};
       if (lastUsed) newBill.cc.last_used = lastUsed;
+      if (creditLimitRaw !== '') newBill.cc.credit_limit = parseFloat(creditLimitRaw);
       if (rewardsRaw !== '') {
         newBill.cc.rewards_balance = parseFloat(rewardsRaw);
         newBill.cc.rewards_unit = rewardsUnit;
