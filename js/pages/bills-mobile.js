@@ -477,8 +477,6 @@ function markPaid(bill, period) {
         // auto-decrement 0% APR counter
         const b = d.bills.find(x => x.id === bill.id);
         if (b?.cc?.apr_zero?.months_left > 0) b.cc.apr_zero.months_left -= 1;
-        // update CC last_used (skip $0 payments — not real usage)
-        if (b?.cc && amt > 0) b.cc.last_used = todayISO();
       }, `mark paid: ${bill.brand} — ${bill.name} $${amt}`);
       toast(`Paid: ${bill.brand} — ${bill.name}`, 'success');
     },

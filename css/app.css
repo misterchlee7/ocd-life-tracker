@@ -348,6 +348,11 @@ th.sorted .sort-icon { color: var(--accent); }
 }
 .badge-due.soon { background: #fef3c7; color: #92400e; }
 .badge-due.overdue { background: #fde8e8; color: #b91c1c; }
+.badge-due-this-month {
+  display: inline-block; padding: 2px 6px; border-radius: 5px;
+  background: #fef3c7; color: #92400e; font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.02em; margin-left: 6px;
+}
 
 /* ---------- rotation freshness ---------- */
 .rot-badge {
@@ -454,6 +459,10 @@ th.sorted .sort-icon { color: var(--accent); }
 .input-with-unit input { flex: 1; min-width: 0; }
 .input-with-unit select { width: 110px; flex-shrink: 0; }
 .summary .value.rewards-pts { font-size: 16px; }
+.rewards-stack { display: flex; flex-direction: column; gap: 3px; margin-top: 2px; }
+.rewards-line { display: flex; align-items: baseline; gap: 6px; }
+.rewards-line-val { font-size: 14px; font-weight: 600; color: var(--text); }
+.rewards-line-sub { font-size: 11px; color: var(--text-faint); }
 .notes-cell { color: var(--text-muted); font-size: 12px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 tr.archived { opacity: 0.5; }
 tr.sub-cancelled { opacity: 0.45; }

@@ -128,35 +128,34 @@ function fmtRewards(bill) {
   const bal = bill.cc?.rewards_balance;
   if (bal == null) return null;
   const unit = bill.cc?.rewards_unit || 'dollars';
-  return unit === 'points'
-    ? `${Number(bal).toLocaleString()} pts`
-    : fmtMoney(bal);
+  if (unit === 'dollars') return fmtMoney(bal);
+  return `${Number(bal).toLocaleString()} ${unit}`;
 }
 
-// Summary card value block for CC rewards — handles mixed dollar + point cards.
-function rewardsCardValueHTML(dollars, dollarCards, points, pointCards) {
-  const totalCards = dollarCards + pointCards;
-  if (totalCards === 0) {
+// Collect all distinct reward units currently in use across all bills.
+function collectRewardUnits(data) {
+  const units = new Set();
+  for (const b of data.bills) {
+    const u = b.cc?.rewards_unit;
+    if (u && u !== 'dollars') units.add(u);
+  }
+  return [...units].sort();
+}
+
+// Summary card value block for CC rewards — shows each reward unit as equal lines.
+function rewardsCardValueHTML(rewardsByUnit) {
+  const entries = Object.entries(rewardsByUnit).filter(([, v]) => v.total > 0);
+  if (entries.length === 0) {
     return `<div class="value">—</div><div class="sub">&nbsp;</div>`;
   }
-  const cardSub = `across ${totalCards} ${totalCards === 1 ? 'card' : 'cards'}`;
-  if (dollars > 0 && points > 0) {
-    // Mixed: show dollars as primary value, points as sub
-    return `
-      <div class="value">${fmtMoney(dollars)}</div>
-      <div class="sub">+ ${Number(points).toLocaleString()} pts · ${cardSub}</div>
-    `;
-  }
-  if (points > 0) {
-    return `
-      <div class="value rewards-pts">${Number(points).toLocaleString()} pts</div>
-      <div class="sub">${cardSub}</div>
-    `;
-  }
-  return `
-    <div class="value">${fmtMoney(dollars)}</div>
-    <div class="sub">${cardSub}</div>
-  `;
+  const lines = entries.map(([unit, { total, count }]) => {
+    const cardLabel = `${count} ${count === 1 ? 'card' : 'cards'}`;
+    const formatted = unit === 'dollars'
+      ? fmtMoney(total)
+      : `${Number(total).toLocaleString()} ${unit}`;
+    return `<div class="rewards-line"><span class="rewards-line-val">${formatted}</span><span class="rewards-line-sub">${cardLabel}</span></div>`;
+  });
+  return `<div class="rewards-stack">${lines.join('')}</div>`;
 }
 
 function summaryHTML(data) {
@@ -164,10 +163,9 @@ function summaryHTML(data) {
   let pendingMonth = 0, pendingByWho = { chang: 0, kiju: 0, joint: 0 };
   let paidMonth = 0, paidByWho = { chang: 0, kiju: 0, joint: 0 };
   let needsConfirmCount = 0, needsConfirmAmt = 0;
-  let rewardsDollars = 0, rewardsDollarCards = 0;
-  let rewardsPoints = 0, rewardsPointCards = 0;
-  let totalCCLimit = 0;
-  const typeCounts = {};
+  const rewardsByUnit = {};
+  let ccCount = 0;
+  const ccLimitByWho = { chang: 0, kiju: 0, joint: 0 };
 
   for (const b of filtered) {
     const { status, payment } = statusForRow(data, b);
@@ -189,13 +187,15 @@ function summaryHTML(data) {
     }
     const rb = b?.cc?.rewards_balance || 0;
     if (rb > 0) {
-      if ((b.cc?.rewards_unit || 'dollars') === 'points') { rewardsPoints += rb; rewardsPointCards++; }
-      else { rewardsDollars += rb; rewardsDollarCards++; }
+      const unit = b.cc?.rewards_unit || 'dollars';
+      if (!rewardsByUnit[unit]) rewardsByUnit[unit] = { total: 0, count: 0 };
+      rewardsByUnit[unit].total += rb;
+      rewardsByUnit[unit].count++;
     }
-    // type breakdown
-    const t = b.type || 'other';
-    typeCounts[t] = (typeCounts[t] || 0) + 1;
-    if (b.cc?.credit_limit > 0) totalCCLimit += b.cc.credit_limit;
+    if (b.type === 'cc' || b.cc) {
+      ccCount++;
+      if (b.cc?.credit_limit > 0) ccLimitByWho[b.who] = (ccLimitByWho[b.who] || 0) + b.cc.credit_limit;
+    }
   }
 
   const pendingWhoSub = [['chang', 'Chang'], ['kiju', 'Kiju'], ['joint', 'Joint']]
@@ -219,12 +219,11 @@ function summaryHTML(data) {
     ? `<div class="sub" style="margin-top:2px;font-size:11px;opacity:0.75">${diffSign}${fmtMoneyShort(diffAbs)} vs pending</div>`
     : '';
 
-  // Type breakdown — show counts for each type present, ordered by BILL_TYPES
-  const typeBreakdown = BILL_TYPES
-    .filter(t => typeCounts[t] > 0)
-    .map(t => `${typeCounts[t]} ${BILL_TYPE_LABELS[t]}`)
+  const totalCCLimit = ccLimitByWho.chang + ccLimitByWho.kiju + ccLimitByWho.joint;
+  const ccLimitWhoSub = [['chang', 'Chang'], ['kiju', 'Kiju'], ['joint', 'Joint']]
+    .filter(([k]) => ccLimitByWho[k] > 0)
+    .map(([k, l]) => `${l} ${fmtMoneyShort(ccLimitByWho[k])}`)
     .join(' · ');
-  const totalBills = filtered.length;
 
   return `
     <div class="summary summary-5">
@@ -246,13 +245,13 @@ function summaryHTML(data) {
       </div>
       <div class="card">
         <div class="label">CC rewards available</div>
-        ${rewardsCardValueHTML(rewardsDollars, rewardsDollarCards, rewardsPoints, rewardsPointCards)}
+        ${rewardsCardValueHTML(rewardsByUnit)}
       </div>
       <div class="card">
-        <div class="label">Bill breakdown</div>
-        <div class="value">${totalBills}</div>
-        <div class="sub">${typeBreakdown || '&nbsp;'}</div>
-        ${totalCCLimit > 0 ? `<div class="sub" style="margin-top:2px;font-size:11px;opacity:0.75">CC limit: ${fmtMoney(totalCCLimit)} total</div>` : ''}
+        <div class="label">Credit cards</div>
+        <div class="value">${ccCount}</div>
+        <div class="sub">${ccLimitWhoSub || '&nbsp;'}</div>
+        ${totalCCLimit > 0 ? `<div class="sub" style="margin-top:2px;font-size:11px;opacity:0.75">Total: ${fmtMoney(totalCCLimit)}</div>` : ''}
       </div>
     </div>
   `;
@@ -354,8 +353,7 @@ function amountCell(bill, year) {
       const cls = [paid ? 'filled' : '', curr ? 'curr' : '', future ? 'future' : ''].filter(Boolean).join(' ');
       segs.push(`<span class="seg ${cls}"></span>`);
     }
-    const nextLabel = yp.nextText && !bill.due_date ? ` · Next: ${yp.nextText}` : '';
-    sub = `<div class="cell-amount-sub">${FREQ_LABELS[bill.frequency] || ''}${nextLabel}</div>
+    sub = `<div class="cell-amount-sub">${FREQ_LABELS[bill.frequency] || ''}</div>
            <div class="year-progress"><span class="lbl">${year} · ${yp.filled}/${yp.total}</span>${segs.join('')}</div>`;
   }
   const balanceLine = bill.balance_remaining != null
@@ -440,6 +438,7 @@ function rotationCell(bill) {
 
 function dueBadge(bill) {
   if (!bill.due_date) return '';
+  if (bill.frequency && bill.frequency !== 'monthly') return '';
   const days = daysFromToday(bill.due_date);
   let cls = '';
   if (days < 0) cls = 'overdue';
@@ -448,6 +447,32 @@ function dueBadge(bill) {
     ? `due ${shortDate(bill.due_date)} (overdue)`
     : `due ${shortDate(bill.due_date)}`;
   return `<span class="badge-due ${cls}" title="Due ${bill.due_date}">${label}</span>`;
+}
+
+function isDueThisMonth(bill, monthISO) {
+  const freq = bill.frequency;
+  if (!freq || freq === 'monthly' || freq === 'one_time' || freq === 'variable') return false;
+  const viewMonth = Number(monthISO.split('-')[1]);
+
+  if (freq === 'bimonthly') {
+    return viewMonth % 2 === 0;
+  }
+  if (freq === 'quarterly') {
+    return viewMonth % 3 === 0;
+  }
+  if (freq === 'biannual' || freq === 'semi_annual') {
+    return viewMonth === 6 || viewMonth === 12;
+  }
+  if (freq === 'annual' || freq === 'biennial' || freq === 'triennial' || freq === 'quinquennial') {
+    return viewMonth === 12;
+  }
+  return false;
+}
+
+function dueThisMonthBadge(bill, monthISO, status) {
+  if (status === 'paid' || status === 'skipped') return '';
+  if (!isDueThisMonth(bill, monthISO)) return '';
+  return '<span class="badge-due-this-month">Due this month</span>';
 }
 
 function aprBadge(bill) {
@@ -510,7 +535,7 @@ function tableHTML(data) {
 
     return `${prefix}<tr data-bill-id="${b.id}">
       <td class="tight" data-sort="${b.day ?? 99}"><span class="day">${b.day ?? '—'}</span></td>
-      <td data-sort="${escapeAttr(b.brand + ' ' + b.name)}"><b>${escape(b.brand)}</b> — ${escape(b.name)} ${typePill}${aprBadge(b)}${dueBadge(b)}${noteLine}</td>
+      <td data-sort="${escapeAttr(b.brand + ' ' + b.name)}"><b>${escape(b.brand)}</b> — ${escape(b.name)} ${typePill}${aprBadge(b)}${dueBadge(b)}${dueThisMonthBadge(b, ui.month, status)}${noteLine}</td>
       <td class="tight" data-sort="${b.who || ''}">${whoPill(b.who)}</td>
       ${amountCell(b, year)}
       <td class="tight" data-sort="${status}">${statusPill(status, payment, b)}${periodRangeLabel(b.frequency, period)}</td>
@@ -723,43 +748,47 @@ function wireInteractions(data) {
       if (!bill) return;
 
       const currentUnit = bill.cc?.rewards_unit || 'dollars';
+      const isDollar = currentUnit === 'dollars';
       const input = document.createElement('input');
       input.type = 'number';
       input.min = '0';
-      input.step = currentUnit === 'points' ? '1' : '0.01';
+      input.step = isDollar ? '0.01' : '1';
       input.value = bill.cc?.rewards_balance ?? '';
       input.className = 'note-input';
-      input.placeholder = currentUnit === 'points' ? '0' : '0.00';
+      input.placeholder = isDollar ? '0.00' : '0';
       input.style.width = '80px';
 
-      const sel = document.createElement('select');
-      sel.className = 'note-input';
-      sel.style.width = '58px';
-      sel.innerHTML = `
-        <option value="dollars" ${currentUnit === 'dollars' ? 'selected' : ''}>$</option>
-        <option value="points"  ${currentUnit === 'points'  ? 'selected' : ''}>pts</option>
-      `;
-      // Update step/placeholder when unit changes
-      sel.addEventListener('change', () => {
-        input.step = sel.value === 'points' ? '1' : '0.01';
-        input.placeholder = sel.value === 'points' ? '0' : '0.00';
+      const existingUnits = collectRewardUnits(state.get().data);
+      const unitInput = document.createElement('input');
+      unitInput.className = 'note-input';
+      unitInput.style.width = '72px';
+      unitInput.value = currentUnit;
+      unitInput.setAttribute('list', 'rewards-unit-list');
+      unitInput.placeholder = 'dollars';
+      const datalist = document.createElement('datalist');
+      datalist.id = 'rewards-unit-list';
+      datalist.innerHTML = ['dollars', ...existingUnits].map(u => `<option value="${u}">`).join('');
+      unitInput.addEventListener('input', () => {
+        const isDol = unitInput.value.trim() === 'dollars';
+        input.step = isDol ? '0.01' : '1';
+        input.placeholder = isDol ? '0.00' : '0';
       });
 
       td.innerHTML = '';
       td.style.whiteSpace = 'nowrap';
       td.appendChild(input);
-      td.appendChild(sel);
+      td.appendChild(unitInput);
+      td.appendChild(datalist);
       input.focus();
       input.select();
 
       let cancelled = false;
       const commit = (e) => {
-        // Only commit when focus leaves both elements in the cell
         if (td.contains(e.relatedTarget)) return;
         if (cancelled) return;
         const raw = input.value.trim();
         const val = raw === '' ? null : parseFloat(raw);
-        const unit = sel.value;
+        const unit = unitInput.value.trim() || 'dollars';
         const curBal = bill.cc?.rewards_balance ?? null;
         const curUnit = bill.cc?.rewards_unit || 'dollars';
         if (val !== curBal || unit !== curUnit) {
@@ -778,9 +807,9 @@ function wireInteractions(data) {
         if (e.key === 'Escape') { cancelled = true; render(state.get()); }
       };
       input.addEventListener('blur', commit);
-      sel.addEventListener('blur', commit);
+      unitInput.addEventListener('blur', commit);
       input.addEventListener('keydown', onKey);
-      sel.addEventListener('keydown', onKey);
+      unitInput.addEventListener('keydown', onKey);
     });
   });
 
@@ -1097,8 +1126,6 @@ function markPaid(bill, period) {
         // auto-decrement 0% APR counter if applicable
         const b = d.bills.find(x => x.id === bill.id);
         if (b?.cc?.apr_zero?.months_left > 0) b.cc.apr_zero.months_left -= 1;
-        // update last_used for CC (only when amount > 0 — $0 payments aren't real usage)
-        if (b?.cc && amt > 0) b.cc.last_used = todayISO();
       }, `mark paid: ${bill.brand} — ${bill.name} $${amt}`);
     },
   });
@@ -1203,10 +1230,11 @@ function openBillForm(existing) {
           <label class="field"><span>Rewards balance</span>
             <div class="input-with-unit">
               <input id="f-rewards" type="number" min="0" step="0.01" value="${cc.rewards_balance ?? ''}" />
-              <select id="f-rewards-unit">
-                <option value="dollars" ${(cc.rewards_unit || 'dollars') === 'dollars' ? 'selected' : ''}>$ dollars</option>
-                <option value="points"  ${cc.rewards_unit === 'points' ? 'selected' : ''}>pts points</option>
-              </select>
+              <input id="f-rewards-unit" list="f-rewards-unit-list" value="${cc.rewards_unit || 'dollars'}" placeholder="dollars" style="width:120px" />
+              <datalist id="f-rewards-unit-list">
+                <option value="dollars">
+                ${collectRewardUnits(state.get().data).map(u => `<option value="${u}">`).join('\n                ')}
+              </datalist>
             </div>
           </label>
         </div>
@@ -1275,7 +1303,7 @@ function openBillForm(existing) {
       if (creditLimitRaw !== '') newBill.cc.credit_limit = parseFloat(creditLimitRaw);
       if (rewardsRaw !== '') {
         newBill.cc.rewards_balance = parseFloat(rewardsRaw);
-        newBill.cc.rewards_unit = rewardsUnit;
+        newBill.cc.rewards_unit = rewardsUnit.trim() || 'dollars';
       }
       if (aprDate || aprMonthsRaw !== '' || aprBalRaw !== '') {
         newBill.cc.apr_zero = {};

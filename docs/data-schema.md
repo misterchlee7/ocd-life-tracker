@@ -88,10 +88,10 @@ Represents a recurring bill or credit card. One row per bill. Payment history li
 
   // CC-specific (optional)
   "cc": {
-    "last_used": "2025-12-07",       // for rotation tracking; omit on regular-use cards
-    "credit_limit": 10000,           // optional; total credit limit — summed in Bill Breakdown summary card
+    "last_used": "2025-12-07",       // for rotation tracking; only updated manually (not on schedule/mark-paid)
+    "credit_limit": 10000,           // optional; total credit limit — shown per-who in Credit Cards summary card
     "rewards_balance": 79.46,        // unredeemed rewards; unit determined by rewards_unit
-    "rewards_unit": "dollars",       // "dollars" (default, omit for existing data) | "points"
+    "rewards_unit": "dollars",       // "dollars" (default) or any free-form string (e.g. "Chase UR", "Amex MR", "Misc pts")
     "apr_zero": {
       "expires_date": "2026-11-01",
       "months_left": 6,              // auto-decremented on payment
