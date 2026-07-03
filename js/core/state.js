@@ -172,6 +172,7 @@ export const state = {
     try {
       localStorage.removeItem(STORAGE_KEYS.cache);
       localStorage.removeItem(STORAGE_KEYS.sha);
+      sessionStorage.removeItem(STORAGE_KEYS.demo); // demo flag — stop auto-entering demo on nav
     } catch (e) {}
     await this.refresh(); // fetch fresh production data from GitHub
   },

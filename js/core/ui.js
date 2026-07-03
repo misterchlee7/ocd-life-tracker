@@ -2,7 +2,7 @@
 // Each page calls initTopbar() on load. Renders into elements with specific IDs
 // present in every page's HTML.
 
-import { getCreds, setCreds, hasCreds } from './config.js';
+import { getCreds, setCreds, hasCreds, STORAGE_KEYS } from './config.js';
 import { state } from './state.js';
 import { ping } from './github.js';
 import { escapeHTML, escapeAttr } from './text.js';
@@ -464,11 +464,30 @@ export function openSettingsModal(opts = {}) {
 export async function bootstrap() {
   initTopbar();
   if (!hasCreds()) {
-    showLandingScreen();
+    // Demo mode survives tab navigation via a sessionStorage flag (data itself
+    // is never persisted — each page re-seeds fresh demo data).
+    let demo = false;
+    try { demo = sessionStorage.getItem(STORAGE_KEYS.demo) === '1'; } catch (e) {}
+    if (demo) {
+      await startDemo();
+    } else {
+      showLandingScreen();
+    }
     return false;
   }
   await state.init();
   return true;
+}
+
+// Enter demo mode: swap display names, flag the session so other tabs skip the
+// landing screen, and load fresh in-memory demo data.
+async function startDemo() {
+  const { getDemoData, DEMO_WHO_NAMES } = await import('./demo-data.js');
+  // Swap display names so real names never appear in demo mode
+  WHO_LABEL.chang = DEMO_WHO_NAMES[0];
+  WHO_LABEL.kiju  = DEMO_WHO_NAMES[1];
+  try { sessionStorage.setItem(STORAGE_KEYS.demo, '1'); } catch (e) {}
+  state.enterGuestMode(getDemoData());
 }
 
 function showLandingScreen() {
@@ -494,12 +513,7 @@ function showLandingScreen() {
 
   el.querySelector('#l-demo').addEventListener('click', () => {
     el.remove();
-    import('./demo-data.js').then(({ getDemoData, DEMO_WHO_NAMES }) => {
-      // Swap display names so real names never appear in demo mode
-      WHO_LABEL.chang = DEMO_WHO_NAMES[0];
-      WHO_LABEL.kiju  = DEMO_WHO_NAMES[1];
-      state.enterGuestMode(getDemoData());
-    });
+    startDemo();
   });
 }
 

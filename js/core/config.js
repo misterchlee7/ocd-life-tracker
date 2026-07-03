@@ -7,6 +7,9 @@ export const STORAGE_KEYS = {
   branch: 'otl.branch',
   cache: 'otl.cache',     // cached data.json contents
   sha: 'otl.sha',         // sha of the cached contents
+  demo: 'otl.demo',       // sessionStorage ONLY — '1' while in demo mode, so tab
+                          // navigation re-enters demo instead of re-showing the
+                          // landing screen. Never stored in localStorage.
 };
 
 export const DEFAULTS = {

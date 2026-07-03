@@ -150,6 +150,7 @@ Implemented in `js/core/demo-data.js`, `js/core/state.js`, and `js/core/ui.js`.
 - Purple demo banner injected below nav tabs via `updateDemoBanner(guest)` in the state subscriber
 - `WHO_LABEL` (the `{ chang, kiju, joint }` display-name map in ui.js) is **mutable**. Demo mode swaps in random names from `DEMO_WHO_NAMES` (exported by demo-data.js) before calling `enterGuestMode()`. Restored to real names on login. Since WHO_LABEL is imported by reference everywhere, the swap is instant app-wide.
 - Demo data uses `addDays(todayISO(), n)` for all dates so it always looks current — no stale dates.
+- **Demo survives tab navigation** via `sessionStorage['otl.demo'] = '1'` (sessionStorage, NOT localStorage — demo data itself is still never persisted). `startDemo()` in ui.js sets the flag; `bootstrap()` checks it when creds are missing and silently re-enters demo (re-seeding fresh demo data — in-memory edits are intentionally lost on navigation) instead of re-showing the landing screen. `exitGuestMode()` clears the flag. Flag dies with the browser tab, so a fresh visit still gets the landing screen.
 
 **Key rule:** If you ever add a new code path that writes/saves data, add a `if (_guest) return` guard or check `state.get().guest` before proceeding. Save must be impossible in guest mode.
 
@@ -257,6 +258,7 @@ Loaded on all pages via `<link>`. Sections:
 | `otl.sha` | SHA of last-fetched data.json | state.cacheWrite() |
 | `otl.tab_order` | JSON array of `href` strings | Tab drag-to-reorder |
 | `otl.theme` | `light` or `dark` (absent = follow OS) | Topbar theme toggle |
+| `otl.demo` | **sessionStorage** (not localStorage): `1` while in demo mode | `startDemo()` in ui.js; cleared by `state.exitGuestMode()` |
 
 Note: `otl.cache` and `otl.sha` are explicitly purged by `state.exitGuestMode()` to prevent any stale or demo data from persisting after login.
 
