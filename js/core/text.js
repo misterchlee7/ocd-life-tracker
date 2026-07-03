@@ -34,6 +34,9 @@ export const BILL_STATUS_LABELS = {
   paid: 'Paid',
   auto: 'Auto',
   skipped: 'Skipped',
+  // display-only keys (never stored) — non-monthly unpaid remap, see derive.js billStatusDisplay
+  due: 'Due',
+  not_due: 'Not due',
 };
 
 export const BILL_TYPES = ['cc', 'loan', 'utility', 'insurance', 'fee', 'investment', 'gift', 'other'];

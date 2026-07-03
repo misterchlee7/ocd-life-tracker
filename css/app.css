@@ -119,7 +119,6 @@
   .badge-due { background: #163029; color: #5fc2a8; }
   .badge-due.soon { background: #3a2f14; color: #d9a94f; }
   .badge-due.overdue { background: #3a2422; color: #e88379; }
-  .badge-due-this-month { background: #3a2f14; color: #d9a94f; }
   .attention-all-clear { background: #1e3320; border-color: #2e4a32; color: #7bc088; }
   .attention-zone.zone-1 .attention-zone-title { background: #3a2422; color: #e88379; border-bottom-color: #4a2f2c; }
   .attention-zone.zone-2 .attention-zone-title { background: #2b2416; color: #d9a94f; border-bottom-color: #57451c; }
@@ -242,6 +241,9 @@ nav.tabs a.tab-drop-after  { box-shadow: inset -3px 0 0 var(--accent); }
 .status.s-paid { background: var(--s-paid-bg); color: var(--s-paid-fg); }
 .status.s-auto { background: var(--s-auto-bg); color: var(--s-auto-fg); }
 .status.s-skipped { background: var(--s-skip-bg); color: var(--s-skip-fg); }
+/* display-only remaps of unpaid for non-monthly bills (derive.js billStatusDisplay) */
+.status.s-not_due { background: var(--teal-bg); color: var(--teal-fg); }
+.status.s-due { background: var(--s-need-bg); color: var(--s-need-fg); }
 
 /* ---------- table ---------- */
 .table-wrap {
@@ -483,11 +485,6 @@ th.sorted .sort-icon { color: var(--accent); }
 }
 .badge-due.soon { background: #fef3c7; color: #92400e; }
 .badge-due.overdue { background: #fde8e8; color: #b91c1c; }
-.badge-due-this-month {
-  display: inline-block; padding: 2px 6px; border-radius: 5px;
-  background: #fef3c7; color: #92400e; font-size: 10.5px; font-weight: 600;
-  letter-spacing: 0.02em; margin-left: 6px;
-}
 
 /* ---------- rotation freshness ---------- */
 .rot-badge {

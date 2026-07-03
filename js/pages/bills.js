@@ -5,7 +5,7 @@ import {
   monthOffset, monthNavClass, monthNavLabelHTML, monthBannerHTML,
 } from '../core/ui.js';
 import { periodFor, todayISO, shortDate, daysFromToday, nextOccurrence, FREQUENCIES } from '../core/dates.js';
-import { paymentFor, yearProgress, rotation, needsConfirm, statusForRow } from '../core/derive.js';
+import { paymentFor, yearProgress, rotation, needsConfirm, statusForRow, billStatusDisplay } from '../core/derive.js';
 import { schedulePending, recordPaid, recordSkip, setPaidAmount, markCardUsed, clearPayment } from '../core/actions.js';
 import {
   escapeHTML as escape, escapeAttr,
@@ -303,7 +303,9 @@ function periodRangeLabel(freq, period) {
 }
 
 function statusPill(status, payment, bill) {
-  let label = STATUS_LABELS[status] || status;
+  // Non-monthly unpaid remaps to "Not due · Sep" / "Due" (display only — see derive.js)
+  const disp = billStatusDisplay(state.get().data, bill, status, ui.month);
+  let label = disp.label;
   // show paid month only when the payment was recorded 2+ months away from the viewed month
   // (suppresses "Paid · May" for April bills legitimately logged a few days late)
   if (status === 'paid' && payment?.paid_date) {
@@ -316,7 +318,7 @@ function statusPill(status, payment, bill) {
       label = `Paid · ${m}`;
     }
   }
-  return `<span class="status clickable s-${status}" data-bill-id="${bill.id}" title="Click to update"><span class="dot"></span>${label}</span>`;
+  return `<span class="status clickable s-${disp.key}" data-bill-id="${bill.id}" title="Click to update"><span class="dot"></span>${label}</span>`;
 }
 
 function amountCell(bill, year) {
@@ -431,32 +433,6 @@ function dueBadge(bill) {
   return `<span class="badge-due ${cls}" title="Due ${bill.due_date}">${label}</span>`;
 }
 
-function isDueThisMonth(bill, monthISO) {
-  const freq = bill.frequency;
-  if (!freq || freq === 'monthly' || freq === 'one_time' || freq === 'variable') return false;
-  const viewMonth = Number(monthISO.split('-')[1]);
-
-  if (freq === 'bimonthly') {
-    return viewMonth % 2 === 0;
-  }
-  if (freq === 'quarterly') {
-    return viewMonth % 3 === 0;
-  }
-  if (freq === 'biannual' || freq === 'semi_annual') {
-    return viewMonth === 6 || viewMonth === 12;
-  }
-  if (freq === 'annual' || freq === 'biennial' || freq === 'triennial' || freq === 'quinquennial') {
-    return viewMonth === 12;
-  }
-  return false;
-}
-
-function dueThisMonthBadge(bill, monthISO, status) {
-  if (status === 'paid' || status === 'skipped') return '';
-  if (!isDueThisMonth(bill, monthISO)) return '';
-  return '<span class="badge-due-this-month">Due this month</span>';
-}
-
 function aprBadge(bill) {
   const apr = bill.cc?.apr_zero;
   if (!apr || !apr.months_left) return '';
@@ -517,7 +493,7 @@ function tableHTML(data) {
 
     return `${prefix}<tr data-bill-id="${b.id}">
       <td class="tight" data-sort="${b.day ?? 99}"><span class="day">${b.day ?? '—'}</span></td>
-      <td data-sort="${escapeAttr(b.brand + ' ' + b.name)}"><b>${escape(b.brand)}</b> — ${escape(b.name)} ${typePill}${aprBadge(b)}${dueBadge(b)}${dueThisMonthBadge(b, ui.month, status)}${noteLine}</td>
+      <td data-sort="${escapeAttr(b.brand + ' ' + b.name)}"><b>${escape(b.brand)}</b> — ${escape(b.name)} ${typePill}${aprBadge(b)}${dueBadge(b)}${noteLine}</td>
       <td class="tight" data-sort="${b.who || ''}">${whoPill(b.who)}</td>
       ${amountCell(b, year)}
       <td class="tight" data-sort="${status}">${statusPill(status, payment, b)}${periodRangeLabel(b.frequency, period)}</td>

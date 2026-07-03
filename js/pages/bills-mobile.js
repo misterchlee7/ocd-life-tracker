@@ -8,12 +8,9 @@ import {
   monthNavClass, monthNavLabelHTML, monthBannerHTML,
 } from '../core/ui.js';
 import { periodFor, todayISO } from '../core/dates.js';
-import { paymentFor, statusForRow } from '../core/derive.js';
+import { paymentFor, statusForRow, billStatusDisplay } from '../core/derive.js';
 import { schedulePending, recordPaid, recordSkip, setPaidAmount, markCardUsed, clearPayment } from '../core/actions.js';
-import {
-  escapeHTML as escape,
-  BILL_STATUS_LABELS as STATUS_LABELS, BILL_TYPE_LABELS, FREQ_LABELS,
-} from '../core/text.js';
+import { escapeHTML as escape, BILL_TYPE_LABELS, FREQ_LABELS } from '../core/text.js';
 
 const page = document.getElementById('page');
 
@@ -125,6 +122,8 @@ function monthNavHTML() {
 
 function billCardHTML(bill, data) {
   const { status, payment } = statusForRow(data, bill, ui.month);
+  // Non-monthly unpaid remaps to "Not due · Sep" / "Due" (display only — see derive.js)
+  const disp = billStatusDisplay(data, bill, status, ui.month);
   const typePill = bill.type
     ? `<span class="pill type tiny">${BILL_TYPE_LABELS[bill.type] || bill.type}</span>`
     : '';
@@ -177,7 +176,7 @@ function billCardHTML(bill, data) {
         <div class="m-card-left">
           ${whoPill(bill.who)}
           ${typePill}
-          <span class="status s-${status}"><span class="dot"></span>${STATUS_LABELS[status] || status}</span>
+          <span class="status s-${disp.key}"><span class="dot"></span>${disp.label}</span>
         </div>
         <div class="m-card-right">
           ${actionBtn}

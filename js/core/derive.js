@@ -4,6 +4,7 @@
 // Kept intentionally sparse for now — will grow as pages are implemented.
 
 import { periodFor, nextOccurrence, todayISO, daysFromToday } from './dates.js';
+import { BILL_STATUS_LABELS } from './text.js';
 
 // All PaymentRecords for a given bill, sorted newest-first.
 export function paymentsFor(data, billId) {
@@ -85,6 +86,44 @@ export function cadenceAnchorMonth(data, bill) {
   const dateISO = latest?.scheduled_date || latest?.paid_date;
   if (!dateISO) return null;
   return Number(dateISO.slice(5, 7)) - 1;
+}
+
+// For a non-monthly bill, which month (0–11) its payment lands on within the
+// viewed month's period, and whether the viewed month has reached it.
+// anchorMonth (from cadenceAnchorMonth) phase-aligns the cadence to real payment
+// history; without it, assumes the last month of the calendar period (Jun for H1,
+// Dec for annual — matches the old "Due this month" badge behavior).
+// Multi-year cadences (biennial+) are treated as annual — the period system is
+// year-granular, so the due month repeats every year.
+// Returns null for monthly/one_time/variable.
+export function dueMonthInfo(bill, monthISO, anchorMonth = null) {
+  const STEP = {
+    bimonthly: 2, quarterly: 3, biannual: 6, semi_annual: 6,
+    annual: 12, biennial: 12, triennial: 12, quinquennial: 12,
+  };
+  const step = STEP[bill.frequency];
+  if (!step) return null;
+  const viewIdx = Number(monthISO.slice(5, 7)) - 1; // 0–11
+  const windowStart = Math.floor(viewIdx / step) * step; // calendar periods align to Jan
+  const dueMonthIdx = anchorMonth != null
+    ? windowStart + (((anchorMonth - windowStart) % step) + step) % step
+    : windowStart + step - 1;
+  return { dueMonthIdx, isDue: viewIdx >= dueMonthIdx };
+}
+
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Pill display for a bill's status in the viewed month. Remaps bare 'unpaid' on
+// non-monthly bills: calm 'not_due' ("Not due · Sep") before the cadence month,
+// then 'due' from the cadence month through the end of the period. The underlying
+// status stays 'unpaid' — sorting, filtering, and summary math are unaffected.
+// Returns { key, label } — key drives the s-* pill class.
+export function billStatusDisplay(data, bill, status, monthISO) {
+  if (status !== 'unpaid') return { key: status, label: BILL_STATUS_LABELS[status] || status };
+  const info = dueMonthInfo(bill, monthISO, cadenceAnchorMonth(data, bill));
+  if (!info) return { key: 'unpaid', label: BILL_STATUS_LABELS.unpaid };
+  if (info.isDue) return { key: 'due', label: BILL_STATUS_LABELS.due };
+  return { key: 'not_due', label: `${BILL_STATUS_LABELS.not_due} · ${MONTH_SHORT[info.dueMonthIdx]}` };
 }
 
 // Comprehensive attention items for the Dashboard hub.

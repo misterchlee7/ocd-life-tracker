@@ -8,6 +8,7 @@ import {
 } from '../js/core/dates.js';
 import {
   yearProgress, statusForRow, cadenceAnchorMonth, rotation, getAttentionItems,
+  dueMonthInfo, billStatusDisplay,
 } from '../js/core/derive.js';
 
 // ---------- periodFor ----------
@@ -162,6 +163,90 @@ test('cadenceAnchorMonth: derives month from latest payment', () => {
 test('cadenceAnchorMonth: null for monthly or no payments', () => {
   assert.equal(cadenceAnchorMonth({ payments: [] }, { id: 'b1', frequency: 'quarterly' }), null);
   assert.equal(cadenceAnchorMonth({ payments: [] }, { id: 'b1', frequency: 'monthly' }), null);
+});
+
+// ---------- derive: dueMonthInfo ----------
+
+test('dueMonthInfo: null for monthly / one_time / variable', () => {
+  assert.equal(dueMonthInfo({ frequency: 'monthly' }, '2026-07'), null);
+  assert.equal(dueMonthInfo({ frequency: 'one_time' }, '2026-07'), null);
+  assert.equal(dueMonthInfo({ frequency: 'variable' }, '2026-07'), null);
+});
+
+test('dueMonthInfo: no anchor falls back to last month of calendar period', () => {
+  // quarterly → Mar/Jun/Sep/Dec
+  assert.deepEqual(dueMonthInfo({ frequency: 'quarterly' }, '2026-02'), { dueMonthIdx: 2, isDue: false });
+  assert.deepEqual(dueMonthInfo({ frequency: 'quarterly' }, '2026-03'), { dueMonthIdx: 2, isDue: true });
+  // biannual → Jun/Dec
+  assert.deepEqual(dueMonthInfo({ frequency: 'biannual' }, '2026-04'), { dueMonthIdx: 5, isDue: false });
+  assert.deepEqual(dueMonthInfo({ frequency: 'semi_annual' }, '2026-12'), { dueMonthIdx: 11, isDue: true });
+  // annual → Dec
+  assert.deepEqual(dueMonthInfo({ frequency: 'annual' }, '2026-05'), { dueMonthIdx: 11, isDue: false });
+});
+
+test('dueMonthInfo: anchor phase-aligns the due month within the period', () => {
+  // quarterly anchored to July (idx 6) → cadence Jan/Apr/Jul/Oct
+  assert.deepEqual(dueMonthInfo({ frequency: 'quarterly' }, '2026-05', 6), { dueMonthIdx: 3, isDue: true });  // Q2, due Apr — May past it
+  assert.deepEqual(dueMonthInfo({ frequency: 'quarterly' }, '2026-08', 6), { dueMonthIdx: 6, isDue: true });  // Q3, due Jul
+  assert.deepEqual(dueMonthInfo({ frequency: 'quarterly' }, '2026-09', 6), { dueMonthIdx: 6, isDue: true });
+  // biannual anchored to Sep (idx 8) → cadence Mar/Sep
+  assert.deepEqual(dueMonthInfo({ frequency: 'biannual' }, '2026-01', 8), { dueMonthIdx: 2, isDue: false }); // H1, due Mar
+  assert.deepEqual(dueMonthInfo({ frequency: 'biannual' }, '2026-07', 8), { dueMonthIdx: 8, isDue: false }); // H2, due Sep
+  assert.deepEqual(dueMonthInfo({ frequency: 'biannual' }, '2026-10', 8), { dueMonthIdx: 8, isDue: true });
+});
+
+test('dueMonthInfo: annual anchored to July — due from July through December', () => {
+  assert.deepEqual(dueMonthInfo({ frequency: 'annual' }, '2026-03', 6), { dueMonthIdx: 6, isDue: false });
+  assert.deepEqual(dueMonthInfo({ frequency: 'annual' }, '2026-07', 6), { dueMonthIdx: 6, isDue: true });
+  assert.deepEqual(dueMonthInfo({ frequency: 'annual' }, '2026-11', 6), { dueMonthIdx: 6, isDue: true });
+});
+
+test('dueMonthInfo: bimonthly anchored to Feb → cadence Feb/Apr/Jun…', () => {
+  assert.deepEqual(dueMonthInfo({ frequency: 'bimonthly' }, '2026-03', 1), { dueMonthIdx: 3, isDue: false }); // Mar off-month, next Apr
+  assert.deepEqual(dueMonthInfo({ frequency: 'bimonthly' }, '2026-04', 1), { dueMonthIdx: 3, isDue: true });
+  assert.deepEqual(dueMonthInfo({ frequency: 'bimonthly' }, '2026-01', 1), { dueMonthIdx: 1, isDue: false }); // Jan, due Feb
+});
+
+test('dueMonthInfo: multi-year cadences treated as annual (year-granular periods)', () => {
+  assert.deepEqual(dueMonthInfo({ frequency: 'biennial' }, '2026-05', 7), { dueMonthIdx: 7, isDue: false });
+  assert.deepEqual(dueMonthInfo({ frequency: 'triennial' }, '2026-05'), { dueMonthIdx: 11, isDue: false });
+});
+
+// ---------- derive: billStatusDisplay ----------
+
+test('billStatusDisplay: non-unpaid statuses pass through unchanged', () => {
+  const data = { payments: [] };
+  const bill = { id: 'b1', frequency: 'quarterly' };
+  assert.deepEqual(billStatusDisplay(data, bill, 'paid', '2026-02'), { key: 'paid', label: 'Paid' });
+  assert.deepEqual(billStatusDisplay(data, bill, 'scheduled', '2026-02'), { key: 'scheduled', label: 'Scheduled' });
+});
+
+test('billStatusDisplay: monthly unpaid stays Unpaid', () => {
+  const data = { payments: [] };
+  const bill = { id: 'b1', frequency: 'monthly' };
+  assert.deepEqual(billStatusDisplay(data, bill, 'unpaid', '2026-02'), { key: 'unpaid', label: 'Unpaid' });
+});
+
+test('billStatusDisplay: non-monthly unpaid before due month → "Not due · <Mon>"', () => {
+  const data = { payments: [] }; // no history → calendar-period-end fallback (Mar for Q1)
+  const bill = { id: 'b1', frequency: 'quarterly' };
+  assert.deepEqual(billStatusDisplay(data, bill, 'unpaid', '2026-02'), { key: 'not_due', label: 'Not due · Mar' });
+});
+
+test('billStatusDisplay: non-monthly unpaid in/after due month → "Due"', () => {
+  const data = { payments: [] };
+  const bill = { id: 'b1', frequency: 'quarterly' };
+  assert.deepEqual(billStatusDisplay(data, bill, 'unpaid', '2026-03'), { key: 'due', label: 'Due' });
+});
+
+test('billStatusDisplay: uses payment history to phase-align the due month', () => {
+  // annual bill historically paid in July → anchored to July, not December
+  const data = {
+    payments: [{ bill_id: 'b1', period: '2025', status: 'paid', paid_date: '2025-07-14' }],
+  };
+  const bill = { id: 'b1', frequency: 'annual' };
+  assert.deepEqual(billStatusDisplay(data, bill, 'unpaid', '2026-03'), { key: 'not_due', label: 'Not due · Jul' });
+  assert.deepEqual(billStatusDisplay(data, bill, 'unpaid', '2026-08'), { key: 'due', label: 'Due' });
 });
 
 // ---------- derive: getAttentionItems (non_renewing subscriptions) ----------
