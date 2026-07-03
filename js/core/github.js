@@ -29,11 +29,29 @@ function contentsUrl() {
   return `${API}/repos/${owner}/${repo}/contents/${DEFAULTS.dataPath}?ref=${encodeURIComponent(branch)}&t=${Date.now()}`;
 }
 
+// Turn a GitHub API failure into a message that tells the user what to DO,
+// not just what status code came back.
+function friendlyError(status, body, verb) {
+  if (status === 401) {
+    return 'GitHub rejected the token (401) — it has probably expired. Open Settings (⚙) and paste a fresh PAT.';
+  }
+  if (status === 403) {
+    return 'GitHub says forbidden (403) — check the PAT still has Contents read & write on the data repo (or you hit a rate limit; wait a minute).';
+  }
+  if (status === 404) {
+    return 'Repo or file not found (404) — check owner / repo / branch in Settings (⚙).';
+  }
+  if (status === 409 || (status === 422 && /sha/i.test(body))) {
+    return 'Save conflict — someone else saved since you loaded this page. Hit Refresh (↻) to pull their changes, but copy any edits you don\'t want to lose first (Refresh discards them).';
+  }
+  return `GitHub ${verb} failed: ${status} ${body}`;
+}
+
 // Returns { data, sha } or { data: null, sha: null } if the file doesn't exist.
 export async function fetchData() {
   const res = await fetch(contentsUrl(), { headers: headers() });
   if (res.status === 404) return { data: null, sha: null };
-  if (!res.ok) throw new Error(`GitHub GET failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) throw new Error(friendlyError(res.status, await res.text(), 'GET'));
   const json = await res.json();
   const decoded = b64decode(json.content.replace(/\n/g, ''));
   return { data: JSON.parse(decoded), sha: json.sha };
@@ -55,7 +73,7 @@ export async function putData(data, sha, message) {
     headers: { ...headers(), 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`GitHub PUT failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) throw new Error(friendlyError(res.status, await res.text(), 'PUT'));
   const json = await res.json();
   return json.content.sha;
 }

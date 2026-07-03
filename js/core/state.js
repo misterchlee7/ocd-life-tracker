@@ -7,6 +7,27 @@ import { fetchData, putData } from './github.js';
 const listeners = new Set();
 const undoStack = [];
 const MAX_UNDO = 50;
+// Human-readable labels of mutations since the last save — used to build a
+// meaningful commit message (the data repo's git history is the version history).
+// Separate from data.history (the persistent in-app activity log): this is
+// transient, in-memory only, and cleared on save/refresh.
+let _labels = [];
+
+function commitMessage() {
+  const unique = [...new Set(_labels)];
+  if (!unique.length) return `update data.json — ${new Date().toISOString()}`;
+  const parts = [];
+  let len = 0;
+  for (const label of unique) {
+    if (parts.length && len + label.length > 90) {
+      parts.push(`+${unique.length - parts.length} more`);
+      break;
+    }
+    parts.push(label);
+    len += label.length + 2;
+  }
+  return parts.join('; ');
+}
 
 let _data = null;
 let _sha = null;
@@ -79,6 +100,7 @@ export const state = {
         _sha = sha;
       }
       _dirty = false;
+      _labels = [];
       cacheWrite();
     } catch (e) {
       _error = e.message;
@@ -95,6 +117,7 @@ export const state = {
     if (!_data) throw new Error('state not loaded');
     undoStack.push({ label: label || 'edit', snapshot: structuredClone(_data) });
     if (undoStack.length > MAX_UNDO) undoStack.shift();
+    _labels.push(label || 'edit');
     fn(_data);
     _data.updated_at = new Date().toISOString();
     if (!_guest) {
@@ -110,7 +133,8 @@ export const state = {
   undo() {
     const last = undoStack.pop();
     if (!last) return null;
-    _data = last.snapshot;
+    _data = last.snapshot; // snapshot pre-dates this mutation's history.push, so data.history reverts too
+    if (_labels.length) _labels.pop(); // the undone mutation no longer belongs in the commit message
     _dirty = true;
     cacheWrite();
     notify();
@@ -128,6 +152,7 @@ export const state = {
     _loading = false;
     _error = null;
     undoStack.length = 0;
+    _labels = [];
     // intentionally no cacheWrite — demo data must never touch localStorage
     notify();
   },
@@ -141,6 +166,7 @@ export const state = {
     _loading = false;
     _error = null;
     undoStack.length = 0;
+    _labels = [];
     // Explicitly purge the localStorage cache so there is zero chance of demo
     // data or stale prod data being shown after login.
     try {
@@ -155,10 +181,11 @@ export const state = {
     if (!_dirty) return { ok: true, noop: true };
     _loading = true; _error = null; notify();
     try {
-      const newSha = await putData(_data, _sha, message);
+      const newSha = await putData(_data, _sha, message || commitMessage());
       _sha = newSha;
       _dirty = false;
       undoStack.length = 0;
+      _labels = [];
       cacheWrite();
       return { ok: true };
     } catch (e) {

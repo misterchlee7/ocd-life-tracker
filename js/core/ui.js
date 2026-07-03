@@ -5,6 +5,7 @@
 import { getCreds, setCreds, hasCreds } from './config.js';
 import { state } from './state.js';
 import { ping } from './github.js';
+import { escapeHTML, escapeAttr } from './text.js';
 
 // ---------- Formatters ----------
 
@@ -138,7 +139,21 @@ export function initTopbar() {
     });
   });
 
-  // render dirty/loading indicator + demo banner
+  // ⌘Z / Ctrl+Z → undo (the button already advertises it). Skip while typing —
+  // inputs have their own undo, and Escape/blur flows must not fight it.
+  document.addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return;
+    const t = e.target;
+    if (t instanceof HTMLElement &&
+        (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    e.preventDefault();
+    onUndo();
+  });
+
+  // render dirty/loading indicator + demo banner.
+  // Errors toast once per occurrence — notify() fires on every mutation, and a
+  // stale fetch error must not re-toast on each subsequent edit.
+  let lastToastedError = null;
   state.subscribe(({ dirty, loading, error, guest }) => {
     const saveBtn = document.getElementById('btn-save');
     if (saveBtn) {
@@ -156,7 +171,8 @@ export function initTopbar() {
 
     updateDemoBanner(guest);
 
-    if (error) toast(error, 'error');
+    if (error && error !== lastToastedError) toast(error, 'error');
+    lastToastedError = error;
   });
 }
 
@@ -181,6 +197,24 @@ function updateDemoBanner(guest) {
   }
 }
 
+// Close a modal backdrop on Escape. Only the topmost backdrop reacts, so
+// nested modals (e.g. grant form over grants list) unwind one at a time.
+// The listener cleans itself up when the element leaves the DOM by any path.
+export function closeOnEscape(el, onClose = () => el.remove()) {
+  const handler = (e) => {
+    if (e.key !== 'Escape') return;
+    if (!document.body.contains(el)) {
+      document.removeEventListener('keydown', handler);
+      return;
+    }
+    const backdrops = document.querySelectorAll('body > .modal-backdrop');
+    if (backdrops[backdrops.length - 1] !== el) return; // not topmost
+    document.removeEventListener('keydown', handler);
+    onClose();
+  };
+  document.addEventListener('keydown', handler);
+}
+
 function openNavGuard(href) {
   const existing = document.getElementById('nav-guard-modal');
   if (existing) existing.remove();
@@ -203,6 +237,7 @@ function openNavGuard(href) {
 
   backdrop.querySelector('#ng-cancel').addEventListener('click', () => backdrop.remove());
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  closeOnEscape(backdrop);
 
   backdrop.querySelector('#ng-discard').addEventListener('click', () => {
     backdrop.remove();
@@ -232,7 +267,19 @@ async function onSave() {
 
 async function onRefresh() {
   const { dirty } = state.get();
-  if (dirty && !confirm('You have unsaved changes. Refresh from GitHub and discard them?')) return;
+  if (dirty) {
+    confirmModal({
+      title: 'Discard unsaved changes?',
+      message: 'Refreshing pulls the latest data.json from GitHub and discards your unsaved changes.',
+      confirmLabel: 'Discard & refresh',
+      danger: true,
+      onConfirm: async () => {
+        await state.refresh();
+        toast('refreshed', 'info');
+      },
+    });
+    return;
+  }
   await state.refresh();
   toast('refreshed', 'info');
 }
@@ -311,6 +358,7 @@ export function openSettingsModal(opts = {}) {
     }
   };
   el.addEventListener('click', (e) => { if (e.target === el && !opts.forceOpen) el.remove(); });
+  if (!opts.forceOpen) closeOnEscape(el);
 
   function persistInputs() {
     setCreds({
@@ -325,10 +373,6 @@ export function openSettingsModal(opts = {}) {
     s.textContent = msg;
     s.className = 'modal-status ' + (kind === 'ok' ? 'ok' : kind === 'err' ? 'err' : '');
   }
-}
-
-function escapeAttr(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
 // ---------- Credential gate ----------
@@ -388,6 +432,92 @@ export function whoPill(who) {
   return `<span class="pill ${cls}">${label}</span>`;
 }
 
+// ---------- Amount modal ----------
+
+// The one "enter an amount" prompt for the whole app (never native prompt()).
+// Confirm button relabels to "No payment" when the value is 0.
+export function amountModal({ title, sub, defaultValue, confirmLabel, onConfirm }) {
+  document.getElementById('amount-modal-backdrop')?.remove();
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'amount-modal-backdrop';
+  backdrop.className = 'modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="modal amount-modal">
+      <h2>${escapeHTML(title)}</h2>
+      ${sub ? `<p class="modal-sub">${escapeHTML(sub)}</p>` : ''}
+      <div class="amount-modal-input-wrap">
+        <span class="amount-modal-prefix">$</span>
+        <input id="amt-input" type="number" min="0" step="0.01"
+               value="${defaultValue ?? 0}" inputmode="decimal" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="amt-cancel">Cancel</button>
+        <button class="btn primary" id="amt-confirm">${escapeHTML(confirmLabel || 'Confirm')}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+
+  const input = backdrop.querySelector('#amt-input');
+  const confirmBtn = backdrop.querySelector('#amt-confirm');
+  input.focus();
+  input.select();
+
+  const updateLabel = () => {
+    const v = parseFloat(input.value);
+    confirmBtn.textContent = (!isNaN(v) && v === 0) ? 'No payment' : (confirmLabel || 'Confirm');
+  };
+  input.addEventListener('input', updateLabel);
+  updateLabel();
+
+  const doConfirm = () => {
+    const amt = parseFloat(input.value);
+    if (isNaN(amt)) { toast('Enter a valid amount', 'error'); input.focus(); return; }
+    backdrop.remove();
+    onConfirm(amt);
+  };
+  const doCancel = () => backdrop.remove();
+
+  confirmBtn.addEventListener('click', doConfirm);
+  backdrop.querySelector('#amt-cancel').addEventListener('click', doCancel);
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) doCancel(); });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); doConfirm(); }
+    if (e.key === 'Escape') doCancel();
+  });
+}
+
+// ---------- Confirm modal ----------
+
+// Styled replacement for native confirm(). onConfirm runs only on explicit confirm;
+// Cancel / backdrop / Escape all dismiss without action.
+export function confirmModal({ title = 'Are you sure?', message = '', confirmLabel = 'Confirm', danger = false, onConfirm }) {
+  document.getElementById('confirm-modal-backdrop')?.remove();
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'confirm-modal-backdrop';
+  backdrop.className = 'modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="modal" style="width:min(380px,92vw)">
+      <h2>${escapeHTML(title)}</h2>
+      ${message ? `<p class="modal-sub">${escapeHTML(message)}</p>` : ''}
+      <div class="modal-actions" style="justify-content:flex-end">
+        <button class="btn" id="cf-cancel">Cancel</button>
+        <button class="btn primary ${danger ? 'danger-solid' : ''}" id="cf-confirm">${escapeHTML(confirmLabel)}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+
+  const confirmBtn = backdrop.querySelector('#cf-confirm');
+  confirmBtn.focus();
+  confirmBtn.addEventListener('click', () => { backdrop.remove(); onConfirm(); });
+  backdrop.querySelector('#cf-cancel').addEventListener('click', () => backdrop.remove());
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  closeOnEscape(backdrop);
+}
+
 // ---------- Mobile detection ----------
 
 export function isMobile() {
@@ -413,20 +543,16 @@ export function showBottomSheet({ title, items = [], onClose } = {}) {
   // often come from user-edited fields (bill names, perk names, etc.). Without
   // escaping, a malicious value would execute as HTML and could steal the PAT
   // from localStorage.
-  const esc = s => String(s ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
   let html = `<div class="bs-handle"></div>`;
-  if (title) html += `<div class="bs-title">${esc(title)}</div>`;
+  if (title) html += `<div class="bs-title">${escapeHTML(title)}</div>`;
   html += `<div class="bs-items">`;
   items.forEach((item, i) => {
     const cls = ['bs-item', item.danger ? 'danger' : ''].filter(Boolean).join(' ');
     html += `<button class="${cls}" data-idx="${i}" ${item.disabled ? 'disabled' : ''}>`;
-    if (item.icon) html += `<span class="bs-icon">${esc(item.icon)}</span>`;
+    if (item.icon) html += `<span class="bs-icon">${escapeHTML(item.icon)}</span>`;
     html += `<span class="bs-body">`;
-    html += `<span class="bs-label">${esc(item.label)}</span>`;
-    if (item.description) html += `<span class="bs-desc">${esc(item.description)}</span>`;
+    html += `<span class="bs-label">${escapeHTML(item.label)}</span>`;
+    if (item.description) html += `<span class="bs-desc">${escapeHTML(item.description)}</span>`;
     html += `</span></button>`;
   });
   html += `</div>`;

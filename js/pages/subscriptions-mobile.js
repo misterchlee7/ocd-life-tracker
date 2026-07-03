@@ -1,17 +1,11 @@
 import { state } from '../core/state.js';
 import { bootstrap, showBottomSheet, whoPill, fmtMoney, fmtMoneyShort, toast } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
+import { escapeHTML, SUB_STATUS_LABELS as STATUS_LABELS, SUB_CAT_LABELS as CAT_LABELS } from '../core/text.js';
 
 const page = document.getElementById('page');
 
 const ui = { filter: 'all' };
-
-const STATUS_LABELS = { active: 'Active', trial: 'Trial', paused: 'Paused', cancelled: 'Cancelled' };
-const CAT_LABELS = {
-  streaming: 'Streaming', music: 'Music', software: 'Software', fitness: 'Fitness',
-  news: 'News', storage: 'Storage', gaming: 'Gaming', shopping: 'Shopping',
-  cc_annual_fee: 'CC Annual Fee', other: 'Other',
-};
 
 function computedRenewal(sub) {
   if (!sub.next_renewal || sub.frequency !== 'monthly') return sub.next_renewal;
@@ -43,10 +37,6 @@ function filteredSubs(data) {
   const subs = data.subscriptions.filter(s => !s.archived && s.status !== 'cancelled');
   if (ui.filter === 'all') return subs;
   return subs.filter(s => s.status === ui.filter);
-}
-
-function escapeHTML(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // ---------- HTML builders ----------

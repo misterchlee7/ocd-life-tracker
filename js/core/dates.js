@@ -89,23 +89,41 @@ export function shortDate(iso) {
 // day = day-of-month (1-31). Returns ISO YYYY-MM-DD for the next upcoming occurrence,
 // anchored at `day`, cadenced by `freq`, relative to `fromISO` (default: today).
 // Returns null for one_time/variable.
-export function nextOccurrence(day, freq, fromISO) {
+//
+// anchorMonth (0–11, optional): a month the cadence is known to land on, e.g. from
+// the bill's most recent payment (see derive.js cadenceAnchorMonth). Without it a
+// quarterly bill is assumed to land on the current month, which can be a month or
+// two off. Ignored for monthly.
+export function nextOccurrence(day, freq, fromISO, anchorMonth = null) {
   if (freq === 'one_time' || freq === 'variable' || !day) return null;
   const today = fromISO ? new Date(fromISO + 'T00:00:00') : new Date();
   today.setHours(0, 0, 0, 0);
 
+  // Build a date clamped to the target month's length — day 31 in April must
+  // stay in April (Apr 30), not roll over into May.
+  const make = (y, m) => {
+    const norm = new Date(y, m, 1); // normalize month overflow (m can be > 11)
+    const lastDay = new Date(norm.getFullYear(), norm.getMonth() + 1, 0).getDate();
+    return new Date(norm.getFullYear(), norm.getMonth(), Math.min(day, lastDay));
+  };
+
   const step = { monthly: 1, bimonthly: 2, quarterly: 3, biannual: 6, semi_annual: 6, annual: 12 }[freq];
   if (step != null) {
-    // find the next month boundary
-    let d = new Date(today.getFullYear(), today.getMonth(), day);
-    if (d < today) d = new Date(today.getFullYear(), today.getMonth() + step, day);
+    let m = today.getMonth();
+    // Phase-align to the known cadence month
+    if (anchorMonth != null && step > 1) {
+      const offset = ((m - anchorMonth) % step + step) % step;
+      if (offset) m += step - offset;
+    }
+    let d = make(today.getFullYear(), m);
+    if (d < today) d = make(today.getFullYear(), m + step);
     return toISO(d);
   }
   // multi-year cadences: use year step
   const yearStep = { biennial: 2, triennial: 3, quinquennial: 5 }[freq];
   if (yearStep) {
-    let d = new Date(today.getFullYear(), today.getMonth(), day);
-    if (d < today) d = new Date(today.getFullYear() + yearStep, today.getMonth(), day);
+    let d = make(today.getFullYear(), today.getMonth());
+    if (d < today) d = make(today.getFullYear() + yearStep, today.getMonth());
     return toISO(d);
   }
   return null;

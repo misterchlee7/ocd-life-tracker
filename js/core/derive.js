@@ -61,37 +61,30 @@ export function needsConfirm(data) {
   });
 }
 
-// Top-level attention items for the per-page nag banners (bills page).
-// Returns a compact array of { kind, bill|perk, message }.
-export function attentionItems(data) {
-  const items = [];
-  const targetMonths = data.settings?.apr_warn_months ?? 2;
-
-  // needs confirm
-  for (const p of needsConfirm(data)) {
-    const bill = data.bills.find(b => b.id === p.bill_id);
-    if (!bill) continue;
-    items.push({
-      kind: 'needs_confirm',
-      bill,
-      payment: p,
-      message: `${bill.brand} — ${bill.name}: scheduled ${p.pending_amount ? '$' + p.pending_amount : ''} — payment day has passed`,
-    });
+// Effective status of a bill for the viewed month (YYYY-MM).
+// Applies the scheduled → needs_confirm auto-advance when the payment day passed.
+// Returns { status, payment, period }.
+export function statusForRow(data, bill, monthISO) {
+  // Always anchor at day 01 — bill.day can exceed the month length (period anchor rule)
+  const period = periodFor(`${monthISO}-01`, bill.frequency);
+  const p = paymentFor(data, bill.id, period);
+  if (!p) return { status: 'unpaid', payment: null, period };
+  let status = p.status;
+  if (status === 'scheduled' && p.scheduled_date && p.scheduled_date < todayISO()) {
+    status = 'needs_confirm';
   }
+  return { status, payment: p, period };
+}
 
-  // 0% APR warnings
-  for (const b of data.bills) {
-    const apr = b?.cc?.apr_zero;
-    if (apr && apr.months_left != null && apr.months_left <= targetMonths) {
-      items.push({
-        kind: 'apr_zero',
-        bill: b,
-        message: `${b.brand} — ${b.name}: ${apr.months_left} months left, $${apr.balance_remaining} remaining`,
-      });
-    }
-  }
-
-  return items;
+// Month index (0–11) that a non-monthly bill's cadence lands on, derived from
+// its most recent payment record. Returns null when unknown (no payments yet)
+// or irrelevant (monthly bills). Used to phase-align nextOccurrence().
+export function cadenceAnchorMonth(data, bill) {
+  if (!bill.frequency || bill.frequency === 'monthly') return null;
+  const latest = paymentsFor(data, bill.id).find(p => p.scheduled_date || p.paid_date);
+  const dateISO = latest?.scheduled_date || latest?.paid_date;
+  if (!dateISO) return null;
+  return Number(dateISO.slice(5, 7)) - 1;
 }
 
 // Comprehensive attention items for the Dashboard hub.

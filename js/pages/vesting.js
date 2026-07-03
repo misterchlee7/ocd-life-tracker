@@ -1,6 +1,10 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu } from '../core/ui.js';
+import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu, amountModal, confirmModal, closeOnEscape } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
+import {
+  escapeHTML, escapeAttr,
+  GRANT_TYPES, GRANT_TYPE_LABELS, VEST_STATUSES, VEST_STATUS_LABELS,
+} from '../core/text.js';
 
 const page = document.getElementById('page');
 
@@ -14,13 +18,6 @@ const ui = {
   sort: { key: 'date', dir: 'asc' },
   openMenuId: null,
   selected: new Set(),
-};
-
-const GRANT_TYPES = ['rsu', 'espp'];
-const GRANT_TYPE_LABELS = { rsu: 'RSU', espp: 'ESPP' };
-const VEST_STATUSES = ['upcoming', 'vested', 'sold', 'pending_settlement'];
-const VEST_STATUS_LABELS = {
-  upcoming: 'Upcoming', vested: 'Vested', sold: 'Sold', pending_settlement: 'Pending settlement',
 };
 
 function grantLabel(g) {
@@ -398,9 +395,16 @@ function wireInteractions(data) {
       const id = btn.dataset.del;
       const v = state.get().data?.vesting.find(x => x.id === id);
       if (!v) return;
-      if (!confirm('Delete this vesting event?')) return;
-      state.mutate(d => { d.vesting = d.vesting.filter(x => x.id !== id); }, `delete event: ${v.date ? shortDate(v.date) : 'event'}${v.shares ? ` (${v.shares} shares)` : ''}`);
-      toast(`Deleted: ${v.date ? shortDate(v.date) : 'event'}`, 'info');
+      confirmModal({
+        title: 'Delete vesting event',
+        message: `Delete the ${v.date ? shortDate(v.date) : ''} vesting event?`,
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: () => {
+          state.mutate(d => { d.vesting = d.vesting.filter(x => x.id !== id); }, `delete event: ${v.date ? shortDate(v.date) : 'event'}${v.shares ? ` (${v.shares} shares)` : ''}`);
+          toast(`Deleted: ${v.date ? shortDate(v.date) : 'event'}`, 'info');
+        },
+      });
     });
   });
 
@@ -616,22 +620,32 @@ function handleEventAction(id, act) {
       state.mutate(d => { const e = d.vesting.find(x => x.id === id); if (e) e.status = 'vested'; }, `mark vested: ${v.date ? shortDate(v.date) : 'event'}${v.shares ? ` (${v.shares} shares)` : ''}`);
       toast(`Vested: ${v.date ? shortDate(v.date) : 'event'}`, 'success');
       break;
-    case 'sold': {
-      const amt = prompt('Sold amount (proceeds $)', computedGrossValue(v, data) ?? '');
-      if (amt == null) return;
-      const n = Number(amt);
-      if (!isFinite(n)) return;
-      state.mutate(d => {
-        const e = d.vesting.find(x => x.id === id);
-        if (e) { e.status = 'sold'; e.sold_amount = n; e.sold_date = todayISO(); }
-      }, `mark sold: ${v.date ? shortDate(v.date) : 'event'} $${n}`);
-      toast(`Sold: ${v.date ? shortDate(v.date) : 'event'}`, 'success');
+    case 'sold':
+      amountModal({
+        title: 'Mark sold',
+        sub: `Proceeds · ${v.date ? shortDate(v.date) : 'event'}`,
+        defaultValue: computedGrossValue(v, data) ?? 0,
+        confirmLabel: 'Mark sold',
+        onConfirm: (n) => {
+          state.mutate(d => {
+            const e = d.vesting.find(x => x.id === id);
+            if (e) { e.status = 'sold'; e.sold_amount = n; e.sold_date = todayISO(); }
+          }, `mark sold: ${v.date ? shortDate(v.date) : 'event'} $${n}`);
+          toast(`Sold: ${v.date ? shortDate(v.date) : 'event'}`, 'success');
+        },
+      });
       break;
-    }
     case 'delete':
-      if (!confirm('Delete this vesting event?')) return;
-      state.mutate(d => { d.vesting = d.vesting.filter(x => x.id !== id); }, `delete event: ${v.date ? shortDate(v.date) : 'event'}${v.shares ? ` (${v.shares} shares)` : ''}`);
-      toast(`Deleted: ${v.date ? shortDate(v.date) : 'event'}`, 'info');
+      confirmModal({
+        title: 'Delete vesting event',
+        message: `Delete the ${v.date ? shortDate(v.date) : ''} vesting event?`,
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: () => {
+          state.mutate(d => { d.vesting = d.vesting.filter(x => x.id !== id); }, `delete event: ${v.date ? shortDate(v.date) : 'event'}${v.shares ? ` (${v.shares} shares)` : ''}`);
+          toast(`Deleted: ${v.date ? shortDate(v.date) : 'event'}`, 'info');
+        },
+      });
       break;
   }
 }
@@ -704,6 +718,7 @@ function openGrantsModal() {
   backdrop.className = 'modal-backdrop';
   backdrop.innerHTML = buildHTML();
   document.body.appendChild(backdrop);
+  closeOnEscape(backdrop);
 
   function rewire() {
     backdrop.querySelector('#gm-close')?.addEventListener('click', () => backdrop.remove());
@@ -725,14 +740,22 @@ function openGrantsModal() {
       btn.addEventListener('click', () => {
         const gId = btn.dataset.delGrant;
         const g = state.get().data?.grants.find(x => x.id === gId);
-        if (!g || !confirm(`Delete grant "${g.label}" and all its vesting events?`)) return;
-        state.mutate(d => {
-          d.grants = d.grants.filter(x => x.id !== gId);
-          d.vesting = d.vesting.filter(x => x.grant_id !== gId);
-        }, `delete grant: ${g.label}`);
-        toast(`Deleted grant: ${g.label}`, 'info');
-        backdrop.innerHTML = buildHTML();
-        rewire();
+        if (!g) return;
+        confirmModal({
+          title: 'Delete grant',
+          message: `Delete grant "${g.label}" and all its vesting events?`,
+          confirmLabel: 'Delete',
+          danger: true,
+          onConfirm: () => {
+            state.mutate(d => {
+              d.grants = d.grants.filter(x => x.id !== gId);
+              d.vesting = d.vesting.filter(x => x.grant_id !== gId);
+            }, `delete grant: ${g.label}`);
+            toast(`Deleted grant: ${g.label}`, 'info');
+            backdrop.innerHTML = buildHTML();
+            rewire();
+          },
+        });
       });
     });
   }
@@ -796,6 +819,7 @@ function openEventForm(existing) {
 
   el.querySelector('#f-cancel').onclick = () => el.remove();
   el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
+  closeOnEscape(el);
   el.querySelector('#f-save').onclick = () => {
     const patch = {
       grant_id: el.querySelector('#f-grant-in').value,
@@ -809,7 +833,7 @@ function openEventForm(existing) {
       sold_amount: el.querySelector('#f-sold-amt').value ? Number(el.querySelector('#f-sold-amt').value) : null,
       notes: el.querySelector('#f-notes').value.trim(),
     };
-    if (!patch.grant_id) { alert('Pick a grant (or add one via Grants…)'); return; }
+    if (!patch.grant_id) { toast('Pick a grant (or add one via Grants…)', 'error'); return; }
     state.mutate(d => {
       if (isEdit) {
         const idx = d.vesting.findIndex(x => x.id === v.id);
@@ -866,6 +890,7 @@ function openGrantForm(existing, onSaved) {
 
   el.querySelector('#f-cancel').onclick = () => el.remove();
   el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
+  closeOnEscape(el);
   el.querySelector('#f-save').onclick = () => {
     const patch = {
       label: el.querySelector('#f-label').value.trim(),
@@ -879,7 +904,7 @@ function openGrantForm(existing, onSaved) {
       schedule_note: el.querySelector('#f-schedule').value.trim(),
       notes: el.querySelector('#f-notes').value.trim(),
     };
-    if (!patch.label) { alert('Label is required'); return; }
+    if (!patch.label) { toast('Label is required', 'error'); return; }
     state.mutate(d => {
       if (isEdit) {
         const idx = d.grants.findIndex(x => x.id === g.id);
@@ -892,13 +917,6 @@ function openGrantForm(existing, onSaved) {
     toast(isEdit ? `Updated grant: ${patch.label}` : `Added grant: ${patch.label}`, 'success');
     onSaved?.();
   };
-}
-
-function escapeAttr(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-}
-function escapeHTML(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 if (isMobile()) {

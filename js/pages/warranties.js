@@ -1,6 +1,10 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, isMobile, whoPill, toast, positionMenu } from '../core/ui.js';
+import { bootstrap, isMobile, whoPill, toast, positionMenu, confirmModal, closeOnEscape } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
+import {
+  escapeHTML, escapeAttr, truncate,
+  WARRANTY_CATEGORIES as CATEGORIES, WARRANTY_CAT_LABELS as CAT_LABELS,
+} from '../core/text.js';
 
 const page = document.getElementById('page');
 
@@ -12,13 +16,6 @@ const ui = {
   showExpired: true,
   sort: { key: 'expiry_date', dir: 'asc' },
   openMenuId: null,
-};
-
-const CATEGORIES = ['electronics', 'appliance', 'vehicle', 'furniture', 'tool', 'outdoor', 'clothing', 'other'];
-const CAT_LABELS = {
-  electronics: 'Electronics', appliance: 'Appliance', vehicle: 'Vehicle',
-  furniture: 'Furniture', tool: 'Tool', outdoor: 'Outdoor',
-  clothing: 'Clothing', other: 'Other',
 };
 
 // ---------- helpers ----------
@@ -271,9 +268,17 @@ function wireInteractions(data) {
       e.stopPropagation();
       const id = btn.dataset.del;
       const w = state.get().data?.warranties?.find(x => x.id === id);
-      if (!w || !confirm(`Delete "${w.name}"?`)) return;
-      state.mutate(d => { d.warranties = (d.warranties || []).filter(x => x.id !== id); }, `delete ${w.name}`);
-      toast(`Deleted: ${w.name}`, 'info');
+      if (!w) return;
+      confirmModal({
+        title: 'Delete warranty',
+        message: `Delete "${w.name}"?`,
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: () => {
+          state.mutate(d => { d.warranties = (d.warranties || []).filter(x => x.id !== id); }, `delete ${w.name}`);
+          toast(`Deleted: ${w.name}`, 'info');
+        },
+      });
     });
   });
 
@@ -388,10 +393,17 @@ function handleMenuAction(id, act) {
       render(state.get());
       break;
     case 'delete':
-      if (!confirm(`Delete "${w.name}"?`)) return;
-      state.mutate(d => { d.warranties = (d.warranties || []).filter(x => x.id !== id); }, `delete ${w.name}`);
-      toast(`Deleted: ${w.name}`, 'info');
-      render(state.get());
+      confirmModal({
+        title: 'Delete warranty',
+        message: `Delete "${w.name}"?`,
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: () => {
+          state.mutate(d => { d.warranties = (d.warranties || []).filter(x => x.id !== id); }, `delete ${w.name}`);
+          toast(`Deleted: ${w.name}`, 'info');
+          render(state.get());
+        },
+      });
       break;
   }
 }
@@ -431,9 +443,10 @@ function openForm(existing) {
 
   el.querySelector('#f-cancel').onclick = () => el.remove();
   el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
+  closeOnEscape(el);
   el.querySelector('#f-save').onclick = () => {
     const name = el.querySelector('#f-name').value.trim();
-    if (!name) { alert('Item name is required'); return; }
+    if (!name) { toast('Item name is required', 'error'); return; }
     const patch = {
       name,
       store: el.querySelector('#f-store').value.trim(),
@@ -455,18 +468,6 @@ function openForm(existing) {
     el.remove();
     toast(isEdit ? `Updated: ${name}` : `Added: ${name}`, 'success');
   };
-}
-
-// ---------- utils ----------
-
-function escapeAttr(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-}
-function escapeHTML(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-function truncate(s, max) {
-  return s.length > max ? escapeHTML(s.slice(0, max)) + '…' : escapeHTML(s);
 }
 
 // ---------- boot ----------

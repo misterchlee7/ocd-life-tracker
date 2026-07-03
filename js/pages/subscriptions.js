@@ -1,6 +1,11 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu } from '../core/ui.js';
+import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu, confirmModal, closeOnEscape } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
+import {
+  escapeHTML, escapeAttr, truncate, FREQ_LABELS,
+  SUB_CATEGORIES as CATEGORIES, SUB_CAT_LABELS as CAT_LABELS,
+  SUB_STATUSES as STATUSES, SUB_STATUS_LABELS as STATUS_LABELS,
+} from '../core/text.js';
 
 const page = document.getElementById('page');
 
@@ -15,20 +20,8 @@ const ui = {
   openMenuId: null,
 };
 
-const CATEGORIES = ['streaming', 'music', 'software', 'fitness', 'news', 'storage', 'gaming', 'shopping', 'cc_annual_fee', 'other'];
-const CAT_LABELS = {
-  streaming: 'Streaming', music: 'Music', software: 'Software', fitness: 'Fitness',
-  news: 'News', storage: 'Storage', gaming: 'Gaming', shopping: 'Shopping',
-  cc_annual_fee: 'CC Annual Fee', other: 'Other',
-};
-const STATUSES = ['active', 'trial', 'paused', 'cancelled'];
 const FILTER_STATUSES = ['active', 'trial', 'paused']; // cancelled has its own section
-const STATUS_LABELS = { active: 'Active', trial: 'Trial', paused: 'Paused', cancelled: 'Cancelled' };
 const FREQUENCIES = ['monthly', 'quarterly', 'semi_annual', 'biannual', 'annual', 'biennial'];
-const FREQ_LABELS = {
-  monthly: 'Monthly', quarterly: 'Quarterly', semi_annual: 'Semi-annual',
-  biannual: 'Biannual', annual: 'Annual', biennial: 'Biennial',
-};
 
 // For active subs, derive the next upcoming renewal from the stored anchor date
 // rather than relying on the stored value being kept up to date manually.
@@ -425,9 +418,16 @@ function wireInteractions() {
       const id = btn.dataset.del;
       const sub = state.get().data?.subscriptions.find(s => s.id === id);
       if (!sub) return;
-      if (!confirm(`Delete "${sub.name}"?`)) return;
-      state.mutate(d => { d.subscriptions = d.subscriptions.filter(x => x.id !== id); }, `delete ${sub.name}`);
-      toast(`Deleted: ${sub.name}`, 'info');
+      confirmModal({
+        title: 'Delete subscription',
+        message: `Delete "${sub.name}"?`,
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: () => {
+          state.mutate(d => { d.subscriptions = d.subscriptions.filter(x => x.id !== id); }, `delete ${sub.name}`);
+          toast(`Deleted: ${sub.name}`, 'info');
+        },
+      });
     });
   });
 
@@ -670,9 +670,16 @@ function handleMenuAction(id, act) {
       state.mutate(d => { const s = d.subscriptions.find(x => x.id === id); if (s) s.archived = !s.archived; }, `archive ${sub.name}`);
       break;
     case 'delete':
-      if (!confirm(`Delete "${sub.name}"?`)) return;
-      state.mutate(d => { d.subscriptions = d.subscriptions.filter(x => x.id !== id); }, `delete ${sub.name}`);
-      toast(`Deleted: ${sub.name}`, 'info');
+      confirmModal({
+        title: 'Delete subscription',
+        message: `Delete "${sub.name}"?`,
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: () => {
+          state.mutate(d => { d.subscriptions = d.subscriptions.filter(x => x.id !== id); }, `delete ${sub.name}`);
+          toast(`Deleted: ${sub.name}`, 'info');
+        },
+      });
       break;
   }
 }
@@ -729,6 +736,7 @@ function openSubForm(existing) {
 
   el.querySelector('#f-cancel').onclick = () => el.remove();
   el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
+  closeOnEscape(el);
   el.querySelector('#f-save').onclick = () => {
     const patch = {
       name: el.querySelector('#f-name').value.trim(),
@@ -742,7 +750,7 @@ function openSubForm(existing) {
       trial_ends: el.querySelector('#f-trial').value || null,
       notes: el.querySelector('#f-notes').value.trim(),
     };
-    if (!patch.name) { alert('Name is required'); return; }
+    if (!patch.name) { toast('Name is required', 'error'); return; }
 
     state.mutate(d => {
       if (isEdit) {
@@ -764,16 +772,6 @@ function subsidizedBadge(s) {
   return ` <span class="badge-subsidized">${label}</span>`;
 }
 
-function truncate(s, max) {
-  return s.length > max ? escapeHTML(s.slice(0, max)) + '…' : escapeHTML(s);
-}
-
-function escapeAttr(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-}
-function escapeHTML(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
 
 if (isMobile()) {
   import('./subscriptions-mobile.js').then(m => m.init());

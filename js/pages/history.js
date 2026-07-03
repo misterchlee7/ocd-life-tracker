@@ -1,9 +1,6 @@
 import { bootstrap } from '../core/ui.js';
 import { state } from '../core/state.js';
-
-function escapeHTML(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+import { escapeHTML } from '../core/text.js';
 
 function fmtTime(ts) {
   return new Date(ts).toLocaleTimeString('en-US', {
@@ -67,8 +64,9 @@ function render({ data }) {
   `;
 }
 
-(async () => {
-  const ok = await bootstrap();
-  if (!ok) return;
-  state.subscribe(render);
-})();
+// Subscribe before bootstrap (matches every other page) — bootstrap() shows the
+// landing screen and returns early when there are no creds, but "Try Demo" calls
+// state.enterGuestMode() directly afterward. Subscribing first means this page
+// still picks up that guest-mode data instead of never rendering.
+state.subscribe(render);
+bootstrap();

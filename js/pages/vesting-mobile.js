@@ -1,23 +1,19 @@
 import { state } from '../core/state.js';
 import { bootstrap, showBottomSheet, fmtMoney, fmtMoneyShort, toast } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
+import { escapeHTML, VEST_STATUS_LABELS as FULL_LABELS } from '../core/text.js';
 
 const page = document.getElementById('page');
 
 const ui = { filter: 'all' };
 
-const VEST_STATUS_LABELS = {
-  upcoming: 'Upcoming', vested: 'Vested', sold: 'Sold', pending_settlement: 'Pending',
-};
+// Mobile cards are tight — shorten "Pending settlement"
+const VEST_STATUS_LABELS = { ...FULL_LABELS, pending_settlement: 'Pending' };
 
 function grantLabel(g) {
   if (!g) return '—';
   const parts = [g.company, g.broker].filter(Boolean);
   return parts.length ? parts.join(' · ') : (g.label || '—');
-}
-
-function escapeHTML(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function filteredEvents(data) {

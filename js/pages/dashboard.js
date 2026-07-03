@@ -1,7 +1,8 @@
 import { state } from '../core/state.js';
 import { bootstrap, whoPill, fmtMoney, fmtMoneyShort } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday, periodFor, nextOccurrence } from '../core/dates.js';
-import { paymentFor, getAttentionItems } from '../core/derive.js';
+import { paymentFor, getAttentionItems, cadenceAnchorMonth } from '../core/derive.js';
+import { escapeHTML } from '../core/text.js';
 
 const page = document.getElementById('page');
 
@@ -28,10 +29,6 @@ function monthlyEquivalent(sub) {
   if (f === 'annual') return amt / 12;
   if (f === 'biennial') return amt / 24;
   return amt;
-}
-
-function escapeHTML(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function render({ data, loading }) {
@@ -82,7 +79,8 @@ function render({ data, loading }) {
   const cutoff = d7.toISOString().slice(0, 10);
   const billsDueThisWeek = [];
   for (const b of activeBills) {
-    const nextDate = b.next_due_date || nextOccurrence(b.day, b.frequency);
+    // Phase-align non-monthly cadences to the bill's most recent payment month
+    const nextDate = nextOccurrence(b.day, b.frequency, undefined, cadenceAnchorMonth(data, b));
     if (!nextDate || nextDate < today || nextDate > cutoff) continue;
     const period = periodFor(nextDate, b.frequency);
     const payment = paymentFor(data, b.id, period);

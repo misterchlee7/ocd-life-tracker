@@ -1,6 +1,11 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, isMobile, toast } from '../core/ui.js';
+import { bootstrap, isMobile, toast, confirmModal, closeOnEscape } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
+import {
+  escapeHTML, escapeAttr,
+  BACKLOG_CATEGORIES as CATEGORIES, BACKLOG_CAT_LABELS as CAT_LABELS, BACKLOG_CAT_ICONS as CAT_ICONS,
+  BACKLOG_STATUSES as STATUSES, BACKLOG_STATUS_LABELS as STATUS_LABELS,
+} from '../core/text.js';
 
 const page = document.getElementById('page');
 
@@ -8,15 +13,6 @@ const ui = {
   search: '',
   showDone: false,
   openMenuId: null,
-};
-
-const CATEGORIES = ['buy', 'do', 'contact', 'misc'];
-const CAT_LABELS  = { buy: 'Buy', do: 'Do', contact: 'Contact', misc: 'Misc' };
-const CAT_ICONS   = { buy: '🛒', do: '✅', contact: '📞', misc: '📌' };
-
-const STATUSES = ['open', 'in_progress', 'done', 'snoozed', 'dropped'];
-const STATUS_LABELS = {
-  open: 'Open', in_progress: 'In progress', done: 'Done', snoozed: 'Snoozed', dropped: 'Dropped',
 };
 
 // Items without a category default to 'misc'
@@ -235,9 +231,17 @@ function wireInteractions(data) {
       e.stopPropagation();
       const id = btn.dataset.del;
       const t = state.get().data?.backlog.find(x => x.id === id);
-      if (!t || !confirm(`Delete "${t.title}"?`)) return;
-      state.mutate(d => { d.backlog = d.backlog.filter(x => x.id !== id); }, `delete ${t.title}`);
-      toast(`Deleted: ${t.title}`, 'info');
+      if (!t) return;
+      confirmModal({
+        title: 'Delete task',
+        message: `Delete "${t.title}"?`,
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: () => {
+          state.mutate(d => { d.backlog = d.backlog.filter(x => x.id !== id); }, `delete ${t.title}`);
+          toast(`Deleted: ${t.title}`, 'info');
+        },
+      });
     });
   });
 
@@ -365,9 +369,16 @@ function handleMenuAction(id, act) {
       state.mutate(d => { const x = d.backlog.find(y => y.id === id); if (x) x.status = 'dropped'; }, `drop task: ${t.title}`);
       break;
     case 'delete':
-      if (!confirm(`Delete "${t.title}"?`)) return;
-      state.mutate(d => { d.backlog = d.backlog.filter(x => x.id !== id); }, `delete task: ${t.title}`);
-      toast(`Deleted: ${t.title}`, 'info');
+      confirmModal({
+        title: 'Delete task',
+        message: `Delete "${t.title}"?`,
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: () => {
+          state.mutate(d => { d.backlog = d.backlog.filter(x => x.id !== id); }, `delete task: ${t.title}`);
+          toast(`Deleted: ${t.title}`, 'info');
+        },
+      });
       break;
   }
 }
@@ -415,6 +426,7 @@ function openTaskForm(existing, defaultCat = 'do') {
 
   el.querySelector('#f-cancel').onclick = () => el.remove();
   el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
+  closeOnEscape(el);
   el.querySelector('#f-save').onclick = () => {
     const tagsStr = el.querySelector('#f-tags').value.trim();
     const patch = {
@@ -425,7 +437,7 @@ function openTaskForm(existing, defaultCat = 'do') {
       tags:     tagsStr ? tagsStr.split(',').map(s => s.trim()).filter(Boolean) : [],
       notes:    el.querySelector('#f-notes').value.trim(),
     };
-    if (!patch.title) { alert('Title is required'); return; }
+    if (!patch.title) { toast('Title is required', 'error'); return; }
     state.mutate(d => {
       if (isEdit) {
         const idx = d.backlog.findIndex(x => x.id === t.id);
@@ -446,13 +458,6 @@ function addDays(iso, n) {
   d.setDate(d.getDate() + n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
-function escapeAttr(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-}
-function escapeHTML(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 if (isMobile()) {
   import('./backlog-mobile.js').then(m => m.init());
 } else {

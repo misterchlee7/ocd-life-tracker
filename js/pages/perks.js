@@ -1,7 +1,8 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu } from '../core/ui.js';
+import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu, confirmModal, closeOnEscape } from '../core/ui.js';
 import { periodFor, todayISO, shortDate } from '../core/dates.js';
 import { claimsFor } from '../core/derive.js';
+import { escapeHTML, escapeAttr, truncate, PERK_STATUS_LABELS as STATUS_LABELS, FREQ_LABELS } from '../core/text.js';
 
 const page = document.getElementById('page');
 
@@ -17,18 +18,8 @@ const ui = {
   openMenuId: null,
 };
 
-const STATUS_LABELS = {
-  available: 'Available',
-  claimed: 'Claimed',
-  skipped: 'Skipped',
-  expired: 'Expired',
-};
-
+// Perks only support a subset of frequencies in the form
 const FREQUENCIES = ['monthly', 'quarterly', 'semi_annual', 'biannual', 'annual'];
-const FREQ_LABELS = {
-  monthly: 'Monthly', quarterly: 'Quarterly', semi_annual: 'Semi-annual',
-  biannual: 'Biannual', annual: 'Annual',
-};
 
 // ---------- helpers ----------
 
@@ -389,12 +380,19 @@ function wireInteractions(data) {
       const id = btn.dataset.del;
       const perk = state.get().data?.perks.find(p => p.id === id);
       if (!perk) return;
-      if (!confirm(`Delete "${perk.name}"?`)) return;
-      state.mutate(d => {
-        d.perks = d.perks.filter(x => x.id !== id);
-        d.perk_claims = d.perk_claims.filter(x => x.perk_id !== id);
-      }, `delete ${perk.name}`);
-      toast(`Deleted: ${perk.name}`, 'info');
+      confirmModal({
+        title: 'Delete perk',
+        message: `Delete "${perk.name}"?`,
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: () => {
+          state.mutate(d => {
+            d.perks = d.perks.filter(x => x.id !== id);
+            d.perk_claims = d.perk_claims.filter(x => x.perk_id !== id);
+          }, `delete ${perk.name}`);
+          toast(`Deleted: ${perk.name}`, 'info');
+        },
+      });
     });
   });
 
@@ -588,12 +586,19 @@ function handleMenuAction(id, act) {
       }, `archive ${perk.name}`);
       break;
     case 'delete':
-      if (!confirm(`Delete "${perk.name}" and all claim history?`)) return;
-      state.mutate(d => {
-        d.perks = d.perks.filter(x => x.id !== id);
-        d.perk_claims = d.perk_claims.filter(x => x.perk_id !== id);
-      }, `delete ${perk.name}`);
-      toast(`Deleted: ${perk.name}`, 'info');
+      confirmModal({
+        title: 'Delete perk',
+        message: `Delete "${perk.name}" and all claim history?`,
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: () => {
+          state.mutate(d => {
+            d.perks = d.perks.filter(x => x.id !== id);
+            d.perk_claims = d.perk_claims.filter(x => x.perk_id !== id);
+          }, `delete ${perk.name}`);
+          toast(`Deleted: ${perk.name}`, 'info');
+        },
+      });
       break;
   }
 }
@@ -641,6 +646,7 @@ function openPerkForm(existing) {
 
   el.querySelector('#f-cancel').onclick = () => el.remove();
   el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
+  closeOnEscape(el);
   el.querySelector('#f-save').onclick = () => {
     const patch = {
       card: el.querySelector('#f-card-in').value.trim(),
@@ -652,7 +658,7 @@ function openPerkForm(existing) {
       annual_fee_card: Number(el.querySelector('#f-fee').value) || 0,
       notes: el.querySelector('#f-notes').value.trim(),
     };
-    if (!patch.card || !patch.name) { alert('Card and name are required'); return; }
+    if (!patch.card || !patch.name) { toast('Card and name are required', 'error'); return; }
 
     state.mutate(d => {
       if (isEdit) {
@@ -666,18 +672,6 @@ function openPerkForm(existing) {
     el.remove();
     toast(isEdit ? `Updated: ${patch.name}` : `Added: ${patch.name}`, 'success');
   };
-}
-
-// ---------- utils ----------
-
-function escapeAttr(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-}
-function escapeHTML(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-function truncate(s, max) {
-  return s.length > max ? escapeHTML(s.slice(0, max)) + '…' : escapeHTML(s);
 }
 
 // ---------- boot ----------

@@ -1,14 +1,9 @@
 import { state } from '../core/state.js';
 import { bootstrap, whoPill, toast } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
+import { escapeHTML, WARRANTY_CAT_LABELS as CAT_LABELS } from '../core/text.js';
 
 const page = document.getElementById('page');
-
-const CAT_LABELS = {
-  electronics: 'Electronics', appliance: 'Appliance', vehicle: 'Vehicle',
-  furniture: 'Furniture', tool: 'Tool', outdoor: 'Outdoor',
-  clothing: 'Clothing', other: 'Other',
-};
 
 function warranties(data) { return data.warranties || []; }
 
@@ -24,10 +19,6 @@ function expiryUrgency(w) {
   if (days <= 30) return 'warn';
   if (days <= 90) return 'soon';
   return '';
-}
-
-function escapeHTML(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // ---------- HTML builders ----------

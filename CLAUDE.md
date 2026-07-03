@@ -15,7 +15,7 @@ Only 2 users (Chang + Kiju). Desktop-first for data entry; mobile has a dedicate
 
 - **Multi-page static site.** One HTML file per "tab" (dashboard, bills, perks, subscriptions, vesting, backlog, warranties). No framework, no build step, no bundler. Just HTML + CSS + vanilla JS modules.
 - **Single source of truth:** `data.json` in the `ocd-life-tracker-data` repo. See [docs/data-schema.md](docs/data-schema.md) for the full schema.
-- **Save model:** changes accumulate in memory (dirty flag), user clicks Save → one `PUT /contents/data.json` commit to GitHub. No autosave per keystroke. Undo/redo is in-memory only, cleared on reload. Version history = git history of the data repo.
+- **Save model:** changes accumulate in memory (dirty flag), user clicks Save → one `PUT /contents/data.json` commit to GitHub. No autosave per keystroke. Undo/redo is in-memory only, cleared on reload. Version history = git history of the data repo. **Commit messages are built from mutation labels** — `state.mutate(fn, label)` labels accumulate since the last save and `save()` joins them (deduped, ~90 char cap, `+N more` overflow) into the commit message when no explicit message is given. This is separate from `data.history` (the persistent in-app activity log, see below) — one lives in git, one lives in the data.
 - **Auth:** user pastes a fine-grained PAT (scoped to `ocd-life-tracker-data` repo, contents: read/write) into a settings modal on first load. Stored in `localStorage` under `otl.pat`.
 - **Demo/guest mode:** first-time visitors (no creds in localStorage) see a landing screen with Login vs Try Demo. Demo mode loads hardcoded sample data entirely in memory — nothing is ever written to localStorage or GitHub. See [Demo mode](#demo--guest-mode) section below.
 
@@ -42,11 +42,13 @@ Only 2 users (Chang + Kiju). Desktop-first for data entry; mobile has a dedicate
 ├── js/
 │   ├── core/
 │   │   ├── config.js       # repo + file path constants, localStorage keys
-│   │   ├── github.js       # GitHub API client (fetchData, putData)
-│   │   ├── state.js        # in-memory data, dirty tracking, undo stack, guest mode
-│   │   ├── dates.js        # frequency math, next-occurrence, "X days ago"
-│   │   ├── derive.js       # computed values (rotation freshness, perk progress, attention items)
-│   │   ├── ui.js           # shared UI helpers (pills, status badges, modals, tab drag, bootstrap, isMobile, showBottomSheet)
+│   │   ├── github.js       # GitHub API client (fetchData, putData, friendly 401/403/404/409 errors)
+│   │   ├── state.js        # in-memory data, dirty tracking, undo stack, guest mode, commit-message labels
+│   │   ├── dates.js        # frequency math, next-occurrence (day-clamped + phase-aligned), "X days ago"
+│   │   ├── derive.js       # computed values (statusForRow, rotation, perk progress, attention items, cadenceAnchorMonth)
+│   │   ├── actions.js      # bill payment mutation commands (schedulePending/recordPaid/recordSkip/…) — the ONLY place payment rules live
+│   │   ├── text.js         # escapeHTML/escapeAttr/truncate + ALL display-label maps (bill/perk/sub/vest/backlog/warranty)
+│   │   ├── ui.js           # shared UI helpers (pills, modals incl. amountModal/confirmModal/closeOnEscape, tab drag, bootstrap, isMobile, showBottomSheet)
 │   │   └── demo-data.js    # hardcoded sample data for guest/demo mode
 │   └── pages/
 │       ├── dashboard.js
@@ -67,6 +69,13 @@ Only 2 users (Chang + Kiju). Desktop-first for data entry; mobile has a dedicate
 ├── docs/
 │   ├── data-schema.md      # canonical JSON schema for data.json
 │   └── decisions.md        # UX decisions + why (payment-confirm flow, rotation, etc.)
+│
+├── tests/
+│   └── dates.test.js       # node --test suite for dates.js + derive.js pure logic
+├── package.json            # "type": "module" + `npm test` script — NO dependencies, still no build step
+│
+├── manifest.json           # PWA manifest (standalone, Add to Home Screen)
+├── icons/                  # icon.svg (favicon) + apple-touch-icon.png + icon-512.png
 │
 └── mockups/                # original static HTML mockups — reference only, do not link
     └── *.html
@@ -197,11 +206,12 @@ Loaded on all pages via `<link>`. Sections:
 
 - **Today divider.** Bills and Vesting show a `TODAY · DATE` rule separating past and future rows. Implemented as `<tr class="today-divider">`. Subscriptions and Warranties intentionally have no today divider.
 - **Inline cell editing.** Clicking a `td.note-cell`, `td.status-cell`, or `td.editable-cell` replaces content with a focused `<input>` or `<select>`. Enter/blur commits via `state.mutate()`; Escape re-renders without saving.
-- **Custom amount modal.** All "enter an amount" prompts use `amountModal({ title, sub, defaultValue, confirmLabel, onConfirm })` — never native `prompt()`. Confirm button relabels to "No payment" when value is `0`.
+- **No native dialogs.** `amountModal`, `confirmModal`, and `closeOnEscape` are exported from `ui.js` — never use native `prompt()`/`confirm()`/`alert()`. All "enter an amount" prompts use `amountModal({ title, sub, defaultValue, confirmLabel, onConfirm })` (confirm button relabels to "No payment" at `0`; has `inputmode="decimal"`). All destructive confirmations use `confirmModal({ title, message, confirmLabel, danger, onConfirm })`. Every modal backdrop gets `closeOnEscape(el)` — it only closes the topmost backdrop, so nested modals unwind one at a time. Form validation failures use `toast(msg, 'error')`. (Known stragglers, deliberately left as native: backlog's snooze-until-date prompt and vesting's "+ Add ticker" prompts — they need text/date input, not a numeric amount.)
+- **Status pill click (bills desktop).** Unpaid → opens schedule amount modal; scheduled/needs_confirm → mark-paid modal; **paid/skipped → opens the row menu** (terminal states never trigger a destructive reset directly — "Clear payment record" lives in the menu instead).
 - **Navigation guard.** `initTopbar()` intercepts `<nav.tabs> a` clicks when `state.dirty` is true AND `state.guest` is false. Shows modal: Stay / Discard & leave / Save & leave.
 - **Tab drag-to-reorder.** HTML5 drag-and-drop on nav tabs. Order saved to `otl.tab_order` in localStorage. New tabs not in saved order are appended at end.
-- **3-dot menu positioning.** All row menus use `positionMenu(menu, anchor)` (exported from `ui.js`). It appends the menu to `document.body` with `position: fixed` and computes exact screen coordinates from `anchor.getBoundingClientRect()`. This prevents clipping by any `overflow: auto/hidden` parent container (e.g. scrollable tables). Opens downward if there's room, upward otherwise — measured after append so no guessing. The outside-click handler also does `document.querySelectorAll('body > .menu').forEach(m => m.remove())` to clean up body-appended menus before re-rendering. Applied in bills, perks, subscriptions, vesting, warranties. **Do not use `anchor.parentElement.appendChild` + `menu-up` class for new menus — always use `positionMenu`.**
-- **Toast messages.** All action toasts include item context: `Deleted: Chase — Rent`, `Updated: Netflix`, `Claimed: Dining Credit`, `↶ Undone: delete Netflix`. `state.undo()` returns the mutation label string so the toast can display it.
+- **3-dot menu positioning.** All row menus use `positionMenu(menu, anchor)` (exported from `ui.js`). It appends the menu to `document.body` with `position: fixed` and computes exact screen coordinates from `anchor.getBoundingClientRect()`. This prevents clipping by any `overflow: auto/hidden` parent container (e.g. scrollable tables). Opens downward if there's room, upward otherwise — measured after append so no guessing, and caps `max-height`/`overflow-y: auto` so long menus scroll instead of overflowing the viewport. The outside-click handler also does `document.querySelectorAll('body > .menu').forEach(m => m.remove())` to clean up body-appended menus before re-rendering. Applied in bills, perks, subscriptions, vesting, warranties. **Do not use `anchor.parentElement.appendChild` + `menu-up` class for new menus — always use `positionMenu`.**
+- **Toast messages.** All action toasts include item context: `Deleted: Chase — Rent`, `Updated: Netflix`, `Claimed: Dining Credit`, `↶ Undone: delete Netflix`. `state.undo()` returns the mutation label string so the toast can display it. `⌘Z`/`Ctrl+Z` also triggers undo (skipped while a form input is focused).
 
 ## Conventions
 
@@ -213,6 +223,11 @@ Loaded on all pages via `<link>`. Sections:
 - Prefer deriving over storing. e.g., don't store `next_due_date` — compute from `day + frequency + last_paid`.
 - GitHub `GET /contents` can return stale CDN data. Always append `?t=${Date.now()}` to cache-bust.
 - **Period anchor:** always pass `-01` as the day to `periodFor()` (never `bill.day`) to avoid JS date rollover on short months.
+- **Escaping + labels come from `js/core/text.js`.** Never define local `escapeHTML`/`escapeAttr`/`truncate` or label maps (STATUS/TYPE/FREQ/CAT) in a page — import them (alias as needed, e.g. `BILL_STATUS_LABELS as STATUS_LABELS`). Anything user-entered that lands in an HTML template must go through `escapeHTML`/`escapeAttr` (bottom sheet and menus do this internally).
+- **Bill payment mutations go through `js/core/actions.js`.** `schedulePending` / `recordPaid` / `recordSkip` / `setPaidAmount` / `markCardUsed` / `clearPayment` encode the domain rules — including that `recordPaid` does **not** touch `last_used` (see the CC `last_used` rule above). Desktop and mobile bills call the same functions inside `state.mutate()` — never re-implement these inline, or the two platforms will silently diverge.
+- **`statusForRow(data, bill, monthISO)` lives in derive.js** (includes the scheduled → needs_confirm auto-advance). Don't duplicate it in pages.
+- **`nextOccurrence(day, freq, fromISO, anchorMonth)`** clamps the day to the month length (day 31 stays in April) and optionally phase-aligns non-monthly cadences to a known cadence month; get `anchorMonth` from `cadenceAnchorMonth(data, bill)` (derived from the latest payment). Note: `bills.js`'s own `nextDueDateForBill()` solves a similar phase-alignment problem locally for the year-progress "next due" display — the two aren't unified, that's a known duplication, not a bug.
+- **Dark mode is variable-driven.** `app.css` has a `prefers-color-scheme: dark` block. Never hardcode neutral colors in CSS or inline styles — use the surface variables (`--surface`, `--hover`, `--hover-subtle`, `--hover-accent`, `--th-bg`, `--day-bg`, `--seg-bg`, `--danger-hover-bg`) and semantic text colors (`--red-fg`, `--amber-fg`, `--green-fg`). New tinted chips/badges need a matching override in the dark block.
 
 ## When making changes
 
@@ -221,6 +236,7 @@ Loaded on all pages via `<link>`. Sections:
 3. Pages render from derived views, not raw state — add new derivations to `js/core/derive.js`.
 4. Any new save/write path must check `_guest` / `state.get().guest` and no-op in demo mode.
 5. Mockups in `/mockups/` are the visual source of truth for v1. Match their styling.
+6. If touching `dates.js`, `derive.js`, or `actions.js`: run `npm test` (node's built-in runner, no deps) and extend `tests/dates.test.js` for new edge cases.
 
 ## localStorage keys
 
@@ -252,6 +268,16 @@ Every `state.mutate()` call appends `{ ts, label }` to `data.history` (rolling c
 - **CSP:** every HTML page has `<meta http-equiv="Content-Security-Policy" ...>` restricting scripts to `'self'`, connections to `api.github.com` only, blocking plugins and external form targets.
 - **PAT:** stored in `localStorage` under `otl.pat`. Fine-grained, scoped to the data repo only. Rotate every 3–6 months. Never paste untrusted content (from email, web pages) directly into name/notes fields.
 
+## PWA + dark mode
+
+- All 8 HTML pages (7 tabs + history.html) link `manifest.json`, `icons/icon.svg` (favicon), and `icons/apple-touch-icon.png`, with `theme-color` metas for both color schemes. Add to Home Screen on iOS/Android gives a standalone app window starting at the dashboard. No service worker (online-only by design).
+- Dark mode follows the OS via `prefers-color-scheme` — no toggle, no JS. See the Conventions bullet for the variable rules.
+- The nav tab for bills.html is labeled **"Bills"** everywhere (desktop tabs + mobile nav) — not "Payments".
+
+## Tests
+
+`npm test` runs `node --test tests/*.test.js` — zero dependencies, no build. Covers the pure logic in `dates.js` (periodFor, nextOccurrence day-clamping/phase/leap-year, daysBetween) and `derive.js` (yearProgress, statusForRow, cadenceAnchorMonth). The root `package.json` exists only for `"type": "module"` + the test script; the site remains a build-free static deploy.
+
 ## Status
 
-All 7 pages (Dashboard, Bills, Perks, Subscriptions, Vesting, Backlog, Warranties) are fully functional on desktop. Bills, Perks, Subscriptions, Vesting, Backlog, and Warranties have dedicated mobile modules (card-based UI with bottom sheet actions). Dashboard renders fine on mobile with the shared topbar/nav. Demo/guest mode is live on all pages and viewports. History log page is live. Deployed at https://misterchlee7.github.io/ocd-life-tracker/.
+All 7 tabs (Dashboard, Bills, Perks, Subscriptions, Vesting, Backlog, Warranties) plus the History log page are fully functional on desktop. Bills, Perks, Subscriptions, Vesting, Backlog, and Warranties have dedicated mobile modules (card-based UI with bottom sheet actions). Dashboard and History render fine on mobile with the shared topbar/nav. Demo/guest mode is live on all pages and viewports. Dark mode + installable PWA shell are live. Deployed at https://misterchlee7.github.io/ocd-life-tracker/.

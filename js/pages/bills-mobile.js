@@ -2,10 +2,15 @@
 // Handles status updates and quick pay actions via bottom sheet.
 // Desktop table render stays in bills.js — this module is loaded only when isMobile() is true.
 
-import { state, uid } from '../core/state.js';
-import { bootstrap, showBottomSheet, whoPill, fmtMoney, toast } from '../core/ui.js';
-import { periodFor, todayISO, shortDate } from '../core/dates.js';
-import { paymentFor } from '../core/derive.js';
+import { state } from '../core/state.js';
+import { bootstrap, showBottomSheet, whoPill, fmtMoney, toast, amountModal } from '../core/ui.js';
+import { periodFor, todayISO } from '../core/dates.js';
+import { paymentFor, statusForRow } from '../core/derive.js';
+import { schedulePending, recordPaid, recordSkip, setPaidAmount, markCardUsed, clearPayment } from '../core/actions.js';
+import {
+  escapeHTML as escape,
+  BILL_STATUS_LABELS as STATUS_LABELS, BILL_TYPE_LABELS, FREQ_LABELS,
+} from '../core/text.js';
 
 const page = document.getElementById('page');
 
@@ -13,23 +18,6 @@ const page = document.getElementById('page');
 const ui = {
   month: todayISO().slice(0, 7), // YYYY-MM
   filter: 'all',                  // 'all' | 'unpaid' | 'scheduled' | 'needs_confirm' | 'paid' | 'skipped'
-};
-
-const STATUS_LABELS = {
-  unpaid: 'Unpaid', scheduled: 'Scheduled', needs_confirm: 'Needs confirm',
-  paid: 'Paid', auto: 'Auto', skipped: 'Skipped',
-};
-
-const BILL_TYPE_LABELS = {
-  cc: 'CC', loan: 'Loan', utility: 'Utility', insurance: 'Insurance',
-  fee: 'Fee', investment: 'Investment', gift: 'Gift', other: 'Other',
-};
-
-const FREQ_LABELS = {
-  monthly: 'Monthly', bimonthly: 'Bimonthly', quarterly: 'Quarterly',
-  biannual: 'Biannual', semi_annual: 'Semi-annual', annual: 'Annual',
-  biennial: 'Biennial', triennial: 'Triennial', quinquennial: '5-yearly',
-  one_time: 'One-time', variable: 'Variable',
 };
 
 // ---------- helpers ----------
@@ -50,25 +38,10 @@ function shiftMonth(ym, delta) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function statusForRow(data, bill) {
-  const period = periodForBill(bill);
-  const p = paymentFor(data, bill.id, period);
-  if (!p) return { status: 'unpaid', payment: null, period };
-  let status = p.status;
-  if (status === 'scheduled' && p.scheduled_date && p.scheduled_date < todayISO()) {
-    status = 'needs_confirm';
-  }
-  return { status, payment: p, period };
-}
-
 function filteredBills(data) {
   const active = data.bills.filter(b => !b.archived);
   if (ui.filter === 'all') return active;
-  return active.filter(b => statusForRow(data, b).status === ui.filter);
-}
-
-function escape(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return active.filter(b => statusForRow(data, b, ui.month).status === ui.filter);
 }
 
 // ---------- summary strip ----------
@@ -78,7 +51,7 @@ function summaryStripHTML(data) {
   let pending = 0, paid = 0, needsConfirm = 0;
 
   for (const b of active) {
-    const { status, payment } = statusForRow(data, b);
+    const { status, payment } = statusForRow(data, b, ui.month);
     if (payment?.pending_amount > 0 && status !== 'paid' && status !== 'skipped') {
       pending += payment.pending_amount;
     }
@@ -114,7 +87,7 @@ function summaryStripHTML(data) {
 
 function filterBarHTML(data) {
   const active = data.bills.filter(b => !b.archived);
-  const count = (key) => active.filter(b => statusForRow(data, b).status === key).length;
+  const count = (key) => active.filter(b => statusForRow(data, b, ui.month).status === key).length;
 
   const chips = [
     { key: 'all',          label: 'All',     n: active.length },
@@ -148,7 +121,7 @@ function monthNavHTML() {
 // ---------- bill card ----------
 
 function billCardHTML(bill, data) {
-  const { status, payment } = statusForRow(data, bill);
+  const { status, payment } = statusForRow(data, bill, ui.month);
   const typePill = bill.type
     ? `<span class="pill type tiny">${BILL_TYPE_LABELS[bill.type] || bill.type}</span>`
     : '';
@@ -290,7 +263,7 @@ function openBillSheet(billId) {
   const { data } = state.get();
   const bill = data.bills.find(b => b.id === billId);
   if (!bill) return;
-  const { status, payment } = statusForRow(data, bill);
+  const { status, payment } = statusForRow(data, bill, ui.month);
   const period = periodForBill(bill);
 
   const items = [
@@ -323,10 +296,7 @@ function openBillSheet(billId) {
           defaultValue: payment?.paid_amount ?? payment?.pending_amount ?? bill.amount ?? 0,
           confirmLabel: 'Update',
           onConfirm: (amt) => {
-            state.mutate(d => {
-              const p = d.payments.find(x => x.bill_id === bill.id && x.period === period);
-              if (p) p.paid_amount = amt;
-            }, `edit paid amount: ${bill.brand} — ${bill.name} → $${amt}`);
+            state.mutate(d => setPaidAmount(d, bill.id, period, amt), `edit paid amount: ${bill.brand} — ${bill.name} → $${amt}`);
             toast(`Updated: ${bill.brand} — ${bill.name}`, 'success');
           },
         });
@@ -337,11 +307,7 @@ function openBillSheet(billId) {
       label: 'Mark card used today',
       description: 'Updates rotation tracker',
       action: () => {
-        state.mutate(d => {
-          const b = d.bills.find(x => x.id === bill.id);
-          if (!b.cc) b.cc = {};
-          b.cc.last_used = todayISO();
-        }, `mark card used: ${bill.brand} ${bill.name}`);
+        state.mutate(d => markCardUsed(d, bill.id), `mark card used: ${bill.brand} ${bill.name}`);
         toast(`${bill.brand} marked used today`, 'success');
       },
     }] : []),
@@ -350,11 +316,7 @@ function openBillSheet(billId) {
       label: `Clear ${monthLabel(ui.month)} payment`,
       danger: true,
       action: () => {
-        state.mutate(d => {
-          d.payments = d.payments.filter(
-            p => !(p.bill_id === bill.id && p.period === period)
-          );
-        }, `clear payment: ${bill.brand} — ${bill.name}`);
+        state.mutate(d => clearPayment(d, bill.id, period), `clear payment: ${bill.brand} — ${bill.name}`);
         toast(`Payment cleared: ${bill.brand} — ${bill.name}`, 'info');
       },
     }] : []),
@@ -363,61 +325,7 @@ function openBillSheet(billId) {
   showBottomSheet({ title: `${bill.brand} — ${bill.name}`, items });
 }
 
-// ---------- amount modal ----------
-
-function amountModal({ title, sub, defaultValue, confirmLabel, onConfirm }) {
-  document.getElementById('amount-modal-backdrop')?.remove();
-
-  const backdrop = document.createElement('div');
-  backdrop.id = 'amount-modal-backdrop';
-  backdrop.className = 'modal-backdrop';
-  backdrop.innerHTML = `
-    <div class="modal amount-modal">
-      <h2>${escape(title)}</h2>
-      ${sub ? `<p class="modal-sub">${escape(sub)}</p>` : ''}
-      <div class="amount-modal-input-wrap">
-        <span class="amount-modal-prefix">$</span>
-        <input id="amt-input" type="number" min="0" step="0.01"
-               value="${defaultValue ?? 0}" inputmode="decimal" />
-      </div>
-      <div class="modal-actions">
-        <button class="btn" id="amt-cancel">Cancel</button>
-        <button class="btn primary" id="amt-confirm">${confirmLabel || 'Confirm'}</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(backdrop);
-
-  const input = backdrop.querySelector('#amt-input');
-  const confirmBtn = backdrop.querySelector('#amt-confirm');
-  input.focus();
-  input.select();
-
-  const updateLabel = () => {
-    const v = parseFloat(input.value);
-    confirmBtn.textContent = (!isNaN(v) && v === 0) ? 'No payment' : (confirmLabel || 'Confirm');
-  };
-  input.addEventListener('input', updateLabel);
-  updateLabel();
-
-  const doConfirm = () => {
-    const amt = parseFloat(input.value);
-    if (isNaN(amt)) { toast('Enter a valid amount', 'error'); input.focus(); return; }
-    backdrop.remove();
-    onConfirm(amt);
-  };
-  const doCancel = () => backdrop.remove();
-
-  confirmBtn.addEventListener('click', doConfirm);
-  backdrop.querySelector('#amt-cancel').addEventListener('click', doCancel);
-  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) doCancel(); });
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); doConfirm(); }
-    if (e.key === 'Escape') doCancel();
-  });
-}
-
-// ---------- payment actions ----------
+// ---------- payment actions (shared logic lives in core/actions.js) ----------
 
 function promptPendingAmount(bill, period) {
   const existing = paymentFor(state.get().data, bill.id, period);
@@ -429,21 +337,7 @@ function promptPendingAmount(bill, period) {
     confirmLabel: 'Schedule',
     onConfirm: (amt) => {
       if (amt === 0) { skipPayment(bill, period); return; }
-      const scheduledDate = `${ui.month}-${String(bill.day || 1).padStart(2, '0')}`;
-      state.mutate(d => {
-        const p = d.payments.find(x => x.bill_id === bill.id && x.period === period);
-        if (p) {
-          p.pending_amount = amt;
-          p.scheduled_date = scheduledDate;
-          if (p.status === 'unpaid') p.status = 'scheduled';
-        } else {
-          d.payments.push({
-            id: uid(), bill_id: bill.id, period, status: 'scheduled',
-            pending_amount: amt, paid_amount: null,
-            scheduled_date: scheduledDate, paid_date: null, marker: '', notes: '',
-          });
-        }
-      }, `schedule: ${bill.brand} — ${bill.name} $${amt}`);
+      state.mutate(d => schedulePending(d, bill, period, amt, ui.month), `schedule: ${bill.brand} — ${bill.name} $${amt}`);
       toast(`Scheduled: ${bill.brand} — ${bill.name}`, 'success');
     },
   });
@@ -459,47 +353,14 @@ function markPaid(bill, period) {
     defaultValue: def,
     confirmLabel: 'Mark paid',
     onConfirm: (amt) => {
-      state.mutate(d => {
-        let p = d.payments.find(pp => pp.bill_id === bill.id && pp.period === period);
-        if (!p) {
-          p = {
-            id: uid(), bill_id: bill.id, period, status: 'paid',
-            pending_amount: amt, paid_amount: amt,
-            scheduled_date: `${ui.month}-${String(bill.day || 1).padStart(2, '0')}`,
-            paid_date: todayISO(), marker: '', notes: '',
-          };
-          d.payments.push(p);
-        } else {
-          p.status = 'paid';
-          p.paid_amount = amt;
-          p.paid_date = todayISO();
-        }
-        // auto-decrement 0% APR counter
-        const b = d.bills.find(x => x.id === bill.id);
-        if (b?.cc?.apr_zero?.months_left > 0) b.cc.apr_zero.months_left -= 1;
-      }, `mark paid: ${bill.brand} — ${bill.name} $${amt}`);
+      state.mutate(d => recordPaid(d, bill, period, amt, ui.month), `mark paid: ${bill.brand} — ${bill.name} $${amt}`);
       toast(`Paid: ${bill.brand} — ${bill.name}`, 'success');
     },
   });
 }
 
 function skipPayment(bill, period) {
-  state.mutate(d => {
-    const p = d.payments.find(x => x.bill_id === bill.id && x.period === period);
-    if (p) {
-      p.status = 'skipped';
-      p.pending_amount = 0;
-      p.paid_amount = 0;
-      p.paid_date = todayISO();
-    } else {
-      d.payments.push({
-        id: uid(), bill_id: bill.id, period, status: 'skipped',
-        pending_amount: 0, paid_amount: 0,
-        scheduled_date: `${ui.month}-${String(bill.day || 1).padStart(2, '0')}`,
-        paid_date: todayISO(), marker: '', notes: '',
-      });
-    }
-  }, `no payment: ${bill.brand} — ${bill.name}`);
+  state.mutate(d => recordSkip(d, bill, period, ui.month), `no payment: ${bill.brand} — ${bill.name}`);
   toast('Marked — no payment this month', 'info');
 }
 

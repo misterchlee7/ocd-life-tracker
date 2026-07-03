@@ -1,15 +1,15 @@
 import { state } from '../core/state.js';
 import { bootstrap, showBottomSheet, toast } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
+import {
+  escapeHTML,
+  BACKLOG_CATEGORIES as CATEGORIES, BACKLOG_CAT_LABELS as CAT_LABELS,
+  BACKLOG_CAT_ICONS as CAT_ICONS, BACKLOG_STATUS_LABELS as STATUS_LABELS,
+} from '../core/text.js';
 
 const page = document.getElementById('page');
 
 const ui = { filter: 'open' };
-
-const CATEGORIES = ['buy', 'do', 'contact', 'misc'];
-const CAT_LABELS = { buy: 'Buy', do: 'Do', contact: 'Contact', misc: 'Misc' };
-const CAT_ICONS  = { buy: '🛒', do: '✅', contact: '📞', misc: '📌' };
-const STATUS_LABELS = { open: 'Open', in_progress: 'In progress', done: 'Done', snoozed: 'Snoozed', dropped: 'Dropped' };
 
 function itemCategory(t) {
   return CATEGORIES.includes(t.category) ? t.category : 'misc';
@@ -24,10 +24,6 @@ function filteredItems(data) {
     return true;
   });
   return items;
-}
-
-function escapeHTML(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function addDays(iso, n) {

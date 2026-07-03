@@ -1,19 +1,13 @@
 import { state, uid } from '../core/state.js';
 import { bootstrap, showBottomSheet, whoPill, fmtMoney, fmtMoneyShort, toast } from '../core/ui.js';
 import { periodFor, todayISO } from '../core/dates.js';
+import { escapeHTML, PERK_STATUS_LABELS as STATUS_LABELS, FREQ_LABELS as FREQ_SHORT } from '../core/text.js';
 
 const page = document.getElementById('page');
 
 const ui = {
   month: todayISO().slice(0, 7),
   filter: 'all',
-};
-
-const STATUS_LABELS = { available: 'Available', claimed: 'Claimed', skipped: 'Skipped', expired: 'Expired' };
-
-const FREQ_SHORT = {
-  monthly: 'Monthly', quarterly: 'Quarterly', semi_annual: 'Semi-annual',
-  biannual: 'Biannual', annual: 'Annual',
 };
 
 function periodForPerk(perk) {
@@ -41,10 +35,6 @@ function filteredPerks(data) {
   const active = data.perks.filter(p => !p.archived);
   if (ui.filter === 'all') return active;
   return active.filter(p => claimForPerk(data, p).status === ui.filter);
-}
-
-function escapeHTML(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // ---------- HTML builders ----------

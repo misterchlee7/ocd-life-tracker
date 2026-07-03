@@ -1,7 +1,15 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu } from '../core/ui.js';
-import { periodFor, todayISO, shortDate, relativeDays, daysFromToday, nextOccurrence } from '../core/dates.js';
-import { paymentFor, yearProgress, rotation, needsConfirm } from '../core/derive.js';
+import {
+  bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL,
+  positionMenu, amountModal, confirmModal, closeOnEscape,
+} from '../core/ui.js';
+import { periodFor, todayISO, shortDate, daysFromToday, nextOccurrence, FREQUENCIES } from '../core/dates.js';
+import { paymentFor, yearProgress, rotation, needsConfirm, statusForRow } from '../core/derive.js';
+import { schedulePending, recordPaid, recordSkip, setPaidAmount, markCardUsed, clearPayment } from '../core/actions.js';
+import {
+  escapeHTML as escape, escapeAttr,
+  BILL_STATUS_LABELS as STATUS_LABELS, BILL_TYPES, BILL_TYPE_LABELS, FREQ_LABELS,
+} from '../core/text.js';
 
 const page = document.getElementById('page');
 
@@ -16,30 +24,6 @@ const ui = {
   showArchived: false,
   sort: { key: 'day', dir: 'asc' },
   openMenuId: null,
-};
-
-const STATUS_LABELS = {
-  unpaid: 'Unpaid',
-  scheduled: 'Scheduled',
-  needs_confirm: 'Needs confirm',
-  paid: 'Paid',
-  auto: 'Auto',
-  skipped: 'Skipped',
-};
-const BILL_TYPES = ['cc', 'loan', 'utility', 'insurance', 'fee', 'investment', 'gift', 'other'];
-const BILL_TYPE_LABELS = {
-  cc: 'CC', loan: 'Loan', utility: 'Utility', insurance: 'Insurance',
-  fee: 'Fee', investment: 'Investment', gift: 'Gift', other: 'Other',
-};
-const FREQUENCIES = [
-  'monthly', 'bimonthly', 'quarterly', 'biannual', 'semi_annual',
-  'annual', 'biennial', 'triennial', 'quinquennial', 'one_time', 'variable',
-];
-const FREQ_LABELS = {
-  monthly: 'Monthly', bimonthly: 'Bimonthly', quarterly: 'Quarterly',
-  biannual: 'Biannual', semi_annual: 'Semi-annual', annual: 'Annual',
-  biennial: 'Biennial', triennial: 'Triennial', quinquennial: '5-yearly',
-  one_time: 'One-time', variable: 'Variable',
 };
 
 // ---------- helpers ----------
@@ -61,21 +45,6 @@ function shiftMonth(ym, delta) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function statusForRow(data, bill) {
-  const period = periodForBill(bill, ui.month);
-  const p = paymentFor(data, bill.id, period);
-  if (!p) {
-    // auto-detect: scheduled past due → needs_confirm (but we'd need a real record)
-    return { status: 'unpaid', payment: null, period };
-  }
-  let status = p.status;
-  // auto-advance scheduled → needs_confirm if past
-  if (status === 'scheduled' && p.scheduled_date && p.scheduled_date < todayISO()) {
-    status = 'needs_confirm';
-  }
-  return { status, payment: p, period };
-}
-
 function filterBills(data) {
   const q = ui.search.trim().toLowerCase();
   return data.bills.filter(b => {
@@ -83,7 +52,7 @@ function filterBills(data) {
     if (ui.who !== 'all' && b.who !== ui.who) return false;
     if (ui.type !== 'all' && b.type !== ui.type) return false;
     if (ui.status !== 'all') {
-      const { status } = statusForRow(data, b);
+      const { status } = statusForRow(data, b, ui.month);
       if (status !== ui.status) return false;
     }
     if (q) {
@@ -106,9 +75,9 @@ function sortBills(bills, data) {
       case 'amount': return b.amount ?? (b.variable ? -1 : 0);
       case 'status': {
         const order = { paid: 0, scheduled: 1, needs_confirm: 2, unpaid: 3, auto: 4, skipped: 5 };
-        return order[statusForRow(data, b).status] ?? 9;
+        return order[statusForRow(data, b, ui.month).status] ?? 9;
       }
-      case 'pending': return statusForRow(data, b).payment?.pending_amount ?? -1;
+      case 'pending': return statusForRow(data, b, ui.month).payment?.pending_amount ?? -1;
       case 'rewards': return b?.cc?.rewards_balance ?? -1;
       case 'lastused': return b?.cc?.last_used || '';
       default: return 0;
@@ -168,7 +137,7 @@ function summaryHTML(data) {
   const ccLimitByWho = { chang: 0, kiju: 0, joint: 0 };
 
   for (const b of filtered) {
-    const { status, payment } = statusForRow(data, b);
+    const { status, payment } = statusForRow(data, b, ui.month);
     if (payment && payment.pending_amount > 0 && status !== 'paid' && status !== 'skipped') {
       pendingMonth += payment.pending_amount;
       pendingByWho[b.who] = (pendingByWho[b.who] || 0) + payment.pending_amount;
@@ -512,7 +481,7 @@ function tableHTML(data) {
       prefix = dividerRow();
       dividerInserted = true;
     }
-    const { status, payment, period } = statusForRow(data, b);
+    const { status, payment, period } = statusForRow(data, b, ui.month);
     // Payment cell: shows paid_amount (green) when paid, pending_amount otherwise
     const paymentCell = (() => {
       if (status === 'paid' && payment?.paid_amount != null) {
@@ -623,7 +592,15 @@ function wireInteractions(data) {
       clearTimeout(t);
       ui.search = e.target.value;
       // debounce re-render to keep typing smooth
-      t = setTimeout(() => render(state.get()), 120);
+      t = setTimeout(() => {
+        render(state.get());
+        // re-render replaces the input — restore focus + caret so typing continues
+        const el = document.getElementById('f-search');
+        if (el) {
+          el.focus();
+          el.setSelectionRange(el.value.length, el.value.length);
+        }
+      }, 120);
     });
   }
 
@@ -669,11 +646,11 @@ function wireInteractions(data) {
     card.addEventListener('click', () => showBreakdownModal(data, card.dataset.breakdown));
   });
 
-  // status click: cycle
+  // status click: cycle (paid/skipped rows open the row menu — see cycleStatus)
   document.querySelectorAll('.status.clickable').forEach(el => {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
-      cycleStatus(el.dataset.billId);
+      cycleStatus(el.dataset.billId, el);
     });
   });
 
@@ -684,12 +661,19 @@ function wireInteractions(data) {
       const id = btn.dataset.del;
       const bill = state.get().data?.bills.find(b => b.id === id);
       if (!bill) return;
-      if (!confirm(`Delete "${bill.brand} — ${bill.name}"?`)) return;
-      state.mutate(d => {
-        d.bills = d.bills.filter(x => x.id !== id);
-        d.payments = d.payments.filter(x => x.bill_id !== id);
-      }, `delete bill: ${bill.brand} — ${bill.name}`);
-      toast(`Deleted: ${bill.brand} — ${bill.name}`, 'info');
+      confirmModal({
+        title: 'Delete bill',
+        message: `Delete "${bill.brand} — ${bill.name}"? This also removes its payment history.`,
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: () => {
+          state.mutate(d => {
+            d.bills = d.bills.filter(x => x.id !== id);
+            d.payments = d.payments.filter(x => x.bill_id !== id);
+          }, `delete bill: ${bill.brand} — ${bill.name}`);
+          toast(`Deleted: ${bill.brand} — ${bill.name}`, 'info');
+        },
+      });
     });
   });
 
@@ -828,7 +812,7 @@ function toggleRowMenu(billId, anchor) {
   const { data } = state.get();
   const bill = data.bills.find(b => b.id === billId);
   if (!bill) return;
-  const { status, payment } = statusForRow(data, bill);
+  const { status, payment } = statusForRow(data, bill, ui.month);
   const menu = document.createElement('div');
   menu.className = 'menu';
   menu.innerHTML = `
@@ -879,21 +863,14 @@ function handleMenuAction(billId, act) {
         defaultValue: existing.paid_amount ?? existing.pending_amount ?? bill.amount ?? 0,
         confirmLabel: 'Update amount',
         onConfirm: (amt) => {
-          state.mutate(d => {
-            const p = d.payments.find(x => x.bill_id === bill.id && x.period === period);
-            if (p) p.paid_amount = amt;
-          }, `edit paid amount ${bill.brand} — ${bill.name}`);
+          state.mutate(d => setPaidAmount(d, bill.id, period, amt), `edit paid amount: ${bill.brand} — ${bill.name} → $${amt}`);
           toast(`Updated: ${bill.brand} — ${bill.name}`, 'success');
         },
       });
       break;
     }
     case 'mark-used':
-      state.mutate(d => {
-        const b = d.bills.find(x => x.id === bill.id);
-        if (!b.cc) b.cc = {};
-        b.cc.last_used = todayISO();
-      }, `mark card used: ${bill.brand} ${bill.name}`);
+      state.mutate(d => markCardUsed(d, bill.id), `mark card used: ${bill.brand} ${bill.name}`);
       toast(`${bill.brand} ${bill.name} marked used today`, 'success');
       break;
     case 'archive':
@@ -903,23 +880,29 @@ function handleMenuAction(billId, act) {
       }, `${bill.archived ? 'unarchive' : 'archive'}: ${bill.brand} — ${bill.name}`);
       break;
     case 'delete':
-      if (!confirm(`Delete ${bill.brand} — ${bill.name}? This also removes its payment history.`)) return;
-      state.mutate(d => {
-        d.bills = d.bills.filter(x => x.id !== bill.id);
-        d.payments = d.payments.filter(p => p.bill_id !== bill.id);
-      }, `delete bill: ${bill.brand} — ${bill.name}`);
+      confirmModal({
+        title: 'Delete bill',
+        message: `Delete ${bill.brand} — ${bill.name}? This also removes its payment history.`,
+        confirmLabel: 'Delete',
+        danger: true,
+        onConfirm: () => {
+          state.mutate(d => {
+            d.bills = d.bills.filter(x => x.id !== bill.id);
+            d.payments = d.payments.filter(p => p.bill_id !== bill.id);
+          }, `delete bill: ${bill.brand} — ${bill.name}`);
+          toast(`Deleted: ${bill.brand} — ${bill.name}`, 'info');
+        },
+      });
       break;
     case 'delete-payment':
-      state.mutate(d => {
-        d.payments = d.payments.filter(p => !(p.bill_id === bill.id && p.period === period));
-      }, `clear payment: ${bill.brand} — ${bill.name}`);
+      state.mutate(d => clearPayment(d, bill.id, period), `clear payment: ${bill.brand} — ${bill.name}`);
       break;
   }
 }
 
 // ---------- status cycle ----------
 
-function cycleStatus(billId) {
+function cycleStatus(billId, anchorEl) {
   const { data } = state.get();
   const bill = data.bills.find(b => b.id === billId);
   if (!bill) return;
@@ -938,13 +921,10 @@ function cycleStatus(billId) {
   if (curStatus === 'scheduled' || curStatus === 'needs_confirm') {
     // → paid
     markPaid(bill, period);
-  } else if (curStatus === 'paid') {
-    // → reset (clear record)
-    if (confirm(`Reset ${bill.brand} ${bill.name} for ${monthLabel(ui.month)}? This deletes the payment record.`)) {
-      state.mutate(d => {
-        d.payments = d.payments.filter(p => p.id !== existing.id);
-      }, `reset payment: ${bill.brand} ${bill.name}`);
-    }
+  } else if (curStatus === 'paid' || curStatus === 'skipped') {
+    // Terminal states: open the row menu instead of a destructive reset —
+    // "Clear payment record" lives there, one deliberate step away.
+    toggleRowMenu(billId, anchorEl);
   }
 }
 
@@ -959,7 +939,7 @@ function showBreakdownModal(data, type) {
 
   if (type === 'pending') {
     for (const b of filtered) {
-      const { status, payment } = statusForRow(data, b);
+      const { status, payment } = statusForRow(data, b, ui.month);
       if (payment && payment.pending_amount > 0 && status !== 'paid' && status !== 'skipped') {
         items.push({ name: `${b.brand ? b.brand + ' ' : ''}${b.name}`, amount: payment.pending_amount, who: b.who });
       }
@@ -967,7 +947,7 @@ function showBreakdownModal(data, type) {
     items.sort((a, b) => b.amount - a.amount);
   } else {
     for (const b of filtered) {
-      const { status, payment } = statusForRow(data, b);
+      const { status, payment } = statusForRow(data, b, ui.month);
       if (status === 'paid' && payment?.paid_amount != null && payment.paid_date?.slice(0, 7) === ui.month) {
         items.push({ name: `${b.brand ? b.brand + ' ' : ''}${b.name}`, amount: payment.paid_amount, who: b.who });
       }
@@ -1007,64 +987,7 @@ function showBreakdownModal(data, type) {
   document.body.appendChild(backdrop);
   backdrop.querySelector('#breakdown-close').addEventListener('click', () => backdrop.remove());
   backdrop.addEventListener('click', e => { if (e.target === backdrop) backdrop.remove(); });
-}
-
-// ---------- amount modal (replaces native prompt) ----------
-
-function amountModal({ title, sub, defaultValue, confirmLabel, onConfirm }) {
-  const existing = document.getElementById('amount-modal-backdrop');
-  if (existing) existing.remove();
-
-  const backdrop = document.createElement('div');
-  backdrop.id = 'amount-modal-backdrop';
-  backdrop.className = 'modal-backdrop';
-  backdrop.innerHTML = `
-    <div class="modal amount-modal">
-      <h2>${escape(title)}</h2>
-      ${sub ? `<p class="modal-sub">${escape(sub)}</p>` : ''}
-      <div class="amount-modal-input-wrap">
-        <span class="amount-modal-prefix">$</span>
-        <input id="amt-input" type="number" min="0" step="0.01" value="${defaultValue ?? 0}" />
-      </div>
-      <div class="modal-actions">
-        <button class="btn" id="amt-cancel">Cancel</button>
-        <button class="btn primary" id="amt-confirm">${confirmLabel || 'Confirm'}</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(backdrop);
-
-  const input = backdrop.querySelector('#amt-input');
-  input.focus();
-  input.select();
-
-  const confirmBtn = backdrop.querySelector('#amt-confirm');
-  const updateLabel = () => {
-    const v = parseFloat(input.value);
-    if (!isNaN(v) && v === 0) {
-      confirmBtn.textContent = 'No payment';
-    } else {
-      confirmBtn.textContent = confirmLabel || 'Confirm';
-    }
-  };
-  input.addEventListener('input', updateLabel);
-  updateLabel();
-
-  const confirm = () => {
-    const amt = parseFloat(input.value);
-    if (isNaN(amt)) { toast('Enter a valid amount', 'error'); input.focus(); return; }
-    backdrop.remove();
-    onConfirm(amt);
-  };
-  const cancel = () => backdrop.remove();
-
-  backdrop.querySelector('#amt-confirm').addEventListener('click', confirm);
-  backdrop.querySelector('#amt-cancel').addEventListener('click', cancel);
-  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) cancel(); });
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); confirm(); }
-    if (e.key === 'Escape') cancel();
-  });
+  closeOnEscape(backdrop);
 }
 
 function promptPendingAmount(bill, period) {
@@ -1078,21 +1001,7 @@ function promptPendingAmount(bill, period) {
     confirmLabel: 'Schedule',
     onConfirm: (amt) => {
       if (amt === 0) { skipPayment(bill, period); return; }
-      const scheduledDate = `${ui.month}-${String(bill.day || 1).padStart(2, '0')}`;
-      state.mutate(d => {
-        const existingP = d.payments.find(p => p.bill_id === bill.id && p.period === period);
-        if (existingP) {
-          existingP.pending_amount = amt;
-          existingP.scheduled_date = scheduledDate;
-          if (existingP.status === 'unpaid') existingP.status = 'scheduled';
-        } else {
-          d.payments.push({
-            id: uid(), bill_id: bill.id, period, status: 'scheduled',
-            pending_amount: amt, paid_amount: null,
-            scheduled_date: scheduledDate, paid_date: null, marker: '', notes: '',
-          });
-        }
-      }, `schedule: ${bill.brand} — ${bill.name} $${amt}`);
+      state.mutate(d => schedulePending(d, bill, period, amt, ui.month), `schedule: ${bill.brand} — ${bill.name} $${amt}`);
     },
   });
 }
@@ -1108,46 +1017,13 @@ function markPaid(bill, period) {
     defaultValue: def,
     confirmLabel: 'Mark paid',
     onConfirm: (amt) => {
-      state.mutate(d => {
-        let p = d.payments.find(pp => pp.bill_id === bill.id && pp.period === period);
-        if (!p) {
-          p = {
-            id: uid(), bill_id: bill.id, period, status: 'paid',
-            pending_amount: amt, paid_amount: amt,
-            scheduled_date: `${ui.month}-${String(bill.day || 1).padStart(2, '0')}`,
-            paid_date: todayISO(), marker: '', notes: '',
-          };
-          d.payments.push(p);
-        } else {
-          p.status = 'paid';
-          p.paid_amount = amt;
-          p.paid_date = todayISO();
-        }
-        // auto-decrement 0% APR counter if applicable
-        const b = d.bills.find(x => x.id === bill.id);
-        if (b?.cc?.apr_zero?.months_left > 0) b.cc.apr_zero.months_left -= 1;
-      }, `mark paid: ${bill.brand} — ${bill.name} $${amt}`);
+      state.mutate(d => recordPaid(d, bill, period, amt, ui.month), `mark paid: ${bill.brand} — ${bill.name} $${amt}`);
     },
   });
 }
 
 function skipPayment(bill, period) {
-  state.mutate(d => {
-    const existing = d.payments.find(p => p.bill_id === bill.id && p.period === period);
-    if (existing) {
-      existing.status = 'skipped';
-      existing.pending_amount = 0;
-      existing.paid_amount = 0;
-      existing.paid_date = todayISO();
-    } else {
-      d.payments.push({
-        id: uid(), bill_id: bill.id, period, status: 'skipped',
-        pending_amount: 0, paid_amount: 0,
-        scheduled_date: `${ui.month}-${String(bill.day || 1).padStart(2, '0')}`,
-        paid_date: todayISO(), marker: '', notes: '',
-      });
-    }
-  }, `no payment: ${bill.brand} — ${bill.name}`);
+  state.mutate(d => recordSkip(d, bill, period, ui.month), `no payment: ${bill.brand} — ${bill.name}`);
   toast('marked — no payment this month', 'info');
 }
 
@@ -1264,6 +1140,7 @@ function openBillForm(existing) {
   `;
   document.body.appendChild(backdrop);
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+  closeOnEscape(backdrop);
   backdrop.querySelector('#f-cancel').onclick = () => backdrop.remove();
   backdrop.querySelector('#f-save').onclick = () => {
     const brand = backdrop.querySelector('#f-brand').value.trim();
@@ -1325,15 +1202,6 @@ function openBillForm(existing) {
     backdrop.remove();
     toast(isEdit ? `Updated: ${brand} — ${name}` : `Added: ${brand} — ${name}`, 'success');
   };
-}
-
-// ---------- utilities ----------
-
-function escape(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-function escapeAttr(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
 // ---------- boot ----------
