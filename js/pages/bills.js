@@ -2,6 +2,7 @@ import { state, uid } from '../core/state.js';
 import {
   bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL,
   positionMenu, amountModal, confirmModal, closeOnEscape,
+  monthOffset, monthNavClass, monthNavLabelHTML, monthBannerHTML,
 } from '../core/ui.js';
 import { periodFor, todayISO, shortDate, daysFromToday, nextOccurrence, FREQUENCIES } from '../core/dates.js';
 import { paymentFor, yearProgress, rotation, needsConfirm, statusForRow } from '../core/derive.js';
@@ -43,6 +44,18 @@ function shiftMonth(ym, delta) {
   const [y, m] = ym.split('-').map(Number);
   const d = new Date(y, m - 1 + delta, 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// Viewed month's name for labels: "April", or "April 2025" across years.
+function viewedMonthName() {
+  const [y, m] = ui.month.split('-').map(Number);
+  const mon = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long' });
+  return y === new Date().getFullYear() ? mon : `${mon} ${y}`;
+}
+
+// "Pending this month" on the current month, "Pending · April" when browsing.
+function monthScopeLabel(prefix) {
+  return monthOffset(ui.month) === 0 ? `${prefix} this month` : `${prefix} · ${viewedMonthName()}`;
 }
 
 function filterBills(data) {
@@ -197,12 +210,12 @@ function summaryHTML(data) {
   return `
     <div class="summary summary-5">
       <div class="card clickable-card" data-breakdown="pending">
-        <div class="label">Pending this month</div>
+        <div class="label">${monthScopeLabel('Pending')}</div>
         <div class="value">${fmtMoney(pendingMonth)}</div>
         <div class="sub">${pendingWhoSub || '&nbsp;'}</div>
       </div>
       <div class="card clickable-card" data-breakdown="paid">
-        <div class="label">Paid this month</div>
+        <div class="label">${monthScopeLabel('Paid')}</div>
         <div class="value">${fmtMoney(paidMonth)}</div>
         <div class="sub">${paidSub}</div>
         ${paidVsPending}
@@ -253,7 +266,7 @@ function filtersHTML() {
       <button class="btn primary" id="btn-add-bill">+ Add bill</button>
       <div class="month-nav">
         <button class="icon-btn" id="m-prev" title="Previous month">‹</button>
-        <div class="month-label">${monthLabel(ui.month)}</div>
+        <div class="month-label ${monthNavClass(ui.month)}">${monthNavLabelHTML(ui.month)}</div>
         <button class="icon-btn" id="m-next" title="Next month">›</button>
       </div>
     </div>
@@ -529,7 +542,7 @@ function tableHTML(data) {
             ${thSortable('name', 'Bill')}
             ${thSortable('who', 'Who')}
             ${thSortable('amount', 'Amount', 'num')}
-            ${thSortable('status', 'This month')}
+            ${thSortable('status', monthOffset(ui.month) === 0 ? 'This month' : `${viewedMonthName()} status`)}
             ${thSortable('pending', 'Payment', 'num center')}
             ${thSortable('rewards', 'Rewards', 'num center')}
             ${thSortable('lastused', 'Last used', 'center')}
@@ -573,6 +586,7 @@ function render(snap) {
   }
 
   page.innerHTML =
+    monthBannerHTML(ui.month) +
     summaryHTML(data) +
     attentionHTML(data) +
     filtersHTML() +
@@ -626,6 +640,9 @@ function wireInteractions(data) {
   });
   document.getElementById('m-next')?.addEventListener('click', () => {
     ui.month = shiftMonth(ui.month, 1); render(state.get());
+  });
+  document.querySelector('[data-month-today]')?.addEventListener('click', () => {
+    ui.month = todayISO().slice(0, 7); render(state.get());
   });
 
   // add bill
@@ -956,7 +973,7 @@ function showBreakdownModal(data, type) {
   }
 
   const total = items.reduce((s, i) => s + i.amount, 0);
-  const title = type === 'pending' ? 'Pending this month' : 'Paid this month';
+  const title = monthScopeLabel(type === 'pending' ? 'Pending' : 'Paid');
   const monthLabel = new Date(ui.month + '-02').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const rows = items.length

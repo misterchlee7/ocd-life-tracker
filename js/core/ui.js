@@ -432,6 +432,55 @@ export function whoPill(who) {
   return `<span class="pill ${cls}">${label}</span>`;
 }
 
+// ---------- Month view context ----------
+
+// The month-browsing pages (bills, perks) let you navigate away from the current
+// month, which makes it easy to edit the wrong month without noticing. These
+// helpers make the off-month state loud: a tinted banner with a "Back to today"
+// button (pages wire [data-month-today] themselves), an amber/teal tint on the
+// month pill, and a "· this month" hint when you're on the current month.
+
+export function monthOffset(ym) {
+  const now = new Date();
+  const [y, m] = ym.split('-').map(Number);
+  return (y - now.getFullYear()) * 12 + (m - 1 - now.getMonth());
+}
+
+function fullMonthLabel(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+// '' on the current month; 'off-month past' / 'off-month future' otherwise.
+export function monthNavClass(ym) {
+  const off = monthOffset(ym);
+  if (off === 0) return '';
+  return off < 0 ? 'off-month past' : 'off-month future';
+}
+
+// Inner HTML for the month pill: label + muted "· this month" hint when current.
+export function monthNavLabelHTML(ym) {
+  const label = fullMonthLabel(ym);
+  return monthOffset(ym) === 0 ? `${label} <span class="mn-cur">· this month</span>` : label;
+}
+
+// Banner shown above page content when viewing a month other than the current one.
+export function monthBannerHTML(ym) {
+  const off = monthOffset(ym);
+  if (off === 0) return '';
+  const rel = off === -1 ? 'last month'
+    : off === 1 ? 'next month'
+    : off < 0 ? `${-off} months ago`
+    : `${off} months ahead`;
+  return `
+    <div class="month-banner ${off < 0 ? 'past' : 'future'}">
+      <span>📅</span>
+      <span>Viewing <b>${fullMonthLabel(ym)}</b> — ${rel}</span>
+      <button class="btn month-today-btn" data-month-today>Back to today</button>
+    </div>
+  `;
+}
+
 // ---------- Amount modal ----------
 
 // The one "enter an amount" prompt for the whole app (never native prompt()).

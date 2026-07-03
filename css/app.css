@@ -49,6 +49,9 @@
   /* nag banner */
   --nag-bg: #fff8e6; --nag-border: #f3d99b; --nag-fg: #7a5510; --nag-strong: #563b07;
 
+  /* teal info tint (future-month banner; matches .badge-due) */
+  --teal-bg: #e3f4f1; --teal-border: #b9e0d7; --teal-fg: #1a7f6a; --teal-strong: #0f5748;
+
   /* urgency row tints (warranties) */
   --row-urgent-bg: #fef0ef;
   --row-warn-bg: #fef9f0;
@@ -97,6 +100,8 @@
     --green-fg: #7bc088;
 
     --nag-bg: #2b2416; --nag-border: #57451c; --nag-fg: #d9b869; --nag-strong: #ecd9a0;
+
+    --teal-bg: #163029; --teal-border: #24493e; --teal-fg: #5fc2a8; --teal-strong: #8fdcc8;
 
     --row-urgent-bg: #2c1d1c;
     --row-warn-bg: #2a241a;
@@ -432,7 +437,24 @@ th.sorted .sort-icon { color: var(--accent); }
   padding: 5px 8px; font: inherit; cursor: pointer;
 }
 .month-nav { display: flex; align-items: center; gap: 2px; margin-left: auto; }
-.month-label { padding: 4px 10px; font-weight: 500; min-width: 120px; text-align: center; }
+.month-label { padding: 4px 10px; font-weight: 500; min-width: 120px; text-align: center; white-space: nowrap; }
+.month-label .mn-cur { font-size: 11px; font-weight: 400; color: var(--text-faint); }
+.month-label.off-month { border-radius: 999px; font-weight: 600; }
+.month-label.off-month.past   { background: var(--s-need-bg); color: var(--s-need-fg); }
+.month-label.off-month.future { background: var(--teal-bg); color: var(--teal-fg); }
+
+/* ---------- month view banner (off-current-month warning) ---------- */
+.month-banner {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px; margin-bottom: 12px;
+  border: 1px solid; border-radius: 9px;
+  font-size: 13px;
+}
+.month-banner.past   { background: var(--nag-bg); border-color: var(--nag-border); color: var(--nag-fg); }
+.month-banner.past b { color: var(--nag-strong); }
+.month-banner.future   { background: var(--teal-bg); border-color: var(--teal-border); color: var(--teal-fg); }
+.month-banner.future b { color: var(--teal-strong); }
+.month-banner .month-today-btn { margin-left: auto; font-size: 12px; padding: 3px 11px; white-space: nowrap; }
 
 /* ---------- day badge ---------- */
 .day {

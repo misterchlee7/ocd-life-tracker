@@ -1,5 +1,9 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu, confirmModal, closeOnEscape } from '../core/ui.js';
+import {
+  bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL,
+  positionMenu, confirmModal, closeOnEscape,
+  monthNavClass, monthNavLabelHTML, monthBannerHTML,
+} from '../core/ui.js';
 import { periodFor, todayISO, shortDate } from '../core/dates.js';
 import { claimsFor } from '../core/derive.js';
 import { escapeHTML, escapeAttr, truncate, PERK_STATUS_LABELS as STATUS_LABELS, FREQ_LABELS } from '../core/text.js';
@@ -26,11 +30,6 @@ const FREQUENCIES = ['monthly', 'quarterly', 'semi_annual', 'biannual', 'annual'
 function periodForPerk(perk, monthISO) {
   // Always use day 01 to avoid JS date rollover when reset_day exceeds month length.
   return periodFor(`${monthISO}-01`, perk.frequency);
-}
-
-function monthLabel(ym) {
-  const [y, m] = ym.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
 function shiftMonth(ym, delta) {
@@ -167,6 +166,7 @@ function render({ data, loading }) {
   const netRoi = claimedYTD - totalAnnualFees;
 
   page.innerHTML = `
+    ${monthBannerHTML(ui.month)}
     ${summaryHTML({ monthlyAvailable, nonMonthlyAvailable, claimedYTD, netRoi, totalAnnualFees })}
     ${filtersHTML(data)}
     ${grouped.length === 0
@@ -223,7 +223,7 @@ function filtersHTML(data) {
       <button class="btn primary" id="btn-add">+ Add perk</button>
       <div class="month-nav">
         <button class="icon-btn" id="nav-prev" title="Previous">‹</button>
-        <div class="month-label">${monthLabel(ui.month)}</div>
+        <div class="month-label ${monthNavClass(ui.month)}">${monthNavLabelHTML(ui.month)}</div>
         <button class="icon-btn" id="nav-next" title="Next">›</button>
       </div>
     </div>
@@ -364,6 +364,9 @@ function wireInteractions(data) {
   });
   document.getElementById('nav-next')?.addEventListener('click', () => {
     ui.month = shiftMonth(ui.month, 1); render(state.get());
+  });
+  document.querySelector('[data-month-today]')?.addEventListener('click', () => {
+    ui.month = todayISO().slice(0, 7); render(state.get());
   });
   document.getElementById('btn-add')?.addEventListener('click', () => openPerkForm());
 

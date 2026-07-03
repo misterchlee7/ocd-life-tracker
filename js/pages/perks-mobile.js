@@ -1,5 +1,8 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, showBottomSheet, whoPill, fmtMoney, fmtMoneyShort, toast } from '../core/ui.js';
+import {
+  bootstrap, showBottomSheet, whoPill, fmtMoney, fmtMoneyShort, toast,
+  monthNavClass, monthNavLabelHTML, monthBannerHTML,
+} from '../core/ui.js';
 import { periodFor, todayISO } from '../core/dates.js';
 import { escapeHTML, PERK_STATUS_LABELS as STATUS_LABELS, FREQ_LABELS as FREQ_SHORT } from '../core/text.js';
 
@@ -12,11 +15,6 @@ const ui = {
 
 function periodForPerk(perk) {
   return periodFor(`${ui.month}-01`, perk.frequency);
-}
-
-function monthLabel(ym) {
-  const [y, m] = ym.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
 function shiftMonth(ym, delta) {
@@ -43,7 +41,7 @@ function monthNavHTML() {
   return `
     <div class="m-month-nav">
       <button data-nav="-1">‹</button>
-      <div class="m-month-label">${monthLabel(ui.month)}</div>
+      <div class="m-month-label ${monthNavClass(ui.month)}">${monthNavLabelHTML(ui.month)}</div>
       <button data-nav="1">›</button>
     </div>
   `;
@@ -175,7 +173,7 @@ function render({ data, loading }) {
     ? `<div class="m-empty"><div class="m-empty-icon">★</div><div class="m-empty-msg">No perks here</div></div>`
     : `<div class="m-list">${perks.map(p => perkCardHTML(p, data)).join('')}</div>`;
 
-  page.innerHTML = monthNavHTML() + summaryStripHTML(data) + filterBarHTML(data) + listHTML;
+  page.innerHTML = monthBannerHTML(ui.month) + monthNavHTML() + summaryStripHTML(data) + filterBarHTML(data) + listHTML;
   wireInteractions(data);
 }
 
@@ -187,6 +185,10 @@ function wireInteractions(data) {
       ui.month = shiftMonth(ui.month, +btn.dataset.nav);
       render(state.get());
     });
+  });
+  page.querySelector('[data-month-today]')?.addEventListener('click', () => {
+    ui.month = todayISO().slice(0, 7);
+    render(state.get());
   });
 
   page.querySelectorAll('[data-filter]').forEach(btn => {

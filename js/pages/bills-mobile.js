@@ -3,7 +3,10 @@
 // Desktop table render stays in bills.js — this module is loaded only when isMobile() is true.
 
 import { state } from '../core/state.js';
-import { bootstrap, showBottomSheet, whoPill, fmtMoney, toast, amountModal } from '../core/ui.js';
+import {
+  bootstrap, showBottomSheet, whoPill, fmtMoney, toast, amountModal,
+  monthNavClass, monthNavLabelHTML, monthBannerHTML,
+} from '../core/ui.js';
 import { periodFor, todayISO } from '../core/dates.js';
 import { paymentFor, statusForRow } from '../core/derive.js';
 import { schedulePending, recordPaid, recordSkip, setPaidAmount, markCardUsed, clearPayment } from '../core/actions.js';
@@ -112,7 +115,7 @@ function monthNavHTML() {
   return `
     <div class="m-month-nav">
       <button id="m-prev">‹</button>
-      <div class="m-month-label">${monthLabel(ui.month)}</div>
+      <div class="m-month-label ${monthNavClass(ui.month)}">${monthNavLabelHTML(ui.month)}</div>
       <button id="m-next">›</button>
     </div>
   `;
@@ -207,6 +210,7 @@ function render(snap) {
     : `<div class="m-list">${bills.map(b => billCardHTML(b, data)).join('')}</div>`;
 
   page.innerHTML =
+    monthBannerHTML(ui.month) +
     monthNavHTML() +
     summaryStripHTML(data) +
     filterBarHTML(data) +
@@ -225,6 +229,10 @@ function wireInteractions(data) {
   });
   document.getElementById('m-next')?.addEventListener('click', () => {
     ui.month = shiftMonth(ui.month, 1);
+    render(state.get());
+  });
+  document.querySelector('[data-month-today]')?.addEventListener('click', () => {
+    ui.month = todayISO().slice(0, 7);
     render(state.get());
   });
 

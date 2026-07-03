@@ -369,6 +369,12 @@
     border-left: 1px solid var(--border-strong);
     border-right: 1px solid var(--border-strong);
   }
+  .m-month-label .mn-cur { font-size: 11px; font-weight: 400; color: var(--text-faint); }
+  .m-month-label.off-month.past   { background: var(--s-need-bg); color: var(--s-need-fg); }
+  .m-month-label.off-month.future { background: var(--teal-bg); color: var(--teal-fg); }
+
+  /* Month banner sits above the full-width month nav */
+  .month-banner { margin-bottom: 10px; flex-wrap: wrap; }
 
   /* Small count badge inside filter chip */
   .m-chip-count {
