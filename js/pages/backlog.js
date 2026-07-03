@@ -1,5 +1,5 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, isMobile, toast, confirmModal, closeOnEscape } from '../core/ui.js';
+import { bootstrap, isMobile, toast, confirmModal, closeOnEscape, pageHeaderHTML } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
 import {
   escapeHTML, escapeAttr,
@@ -46,6 +46,7 @@ function render({ data, loading }) {
   const snoozedDue = data.backlog.filter(t => t.status === 'snoozed' && t.snoozed_until && daysFromToday(t.snoozed_until) <= 0);
 
   page.innerHTML = `
+    ${pageHeaderHTML('Backlog', `${openItems.length} open`)}
     ${summaryHTML({ open: openItems.length, overdue, dueSoon, snoozedDue })}
     ${snoozedDue.length ? snoozeBannerHTML(snoozedDue) : ''}
     ${filtersHTML()}

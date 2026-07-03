@@ -7,6 +7,35 @@ import { state } from './state.js';
 import { ping } from './github.js';
 import { escapeHTML, escapeAttr } from './text.js';
 
+// ---------- Icons ----------
+
+// Inline SVG icon set (Lucide outlines). Rendered with currentColor so icons
+// inherit text color; sized via .icon / .icon.sm in app.css. Never use emoji
+// for UI chrome — it renders differently per OS.
+const ICON_PATHS = {
+  undo: '<polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+  history: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  sunmoon: '<path d="M12 8a2.83 2.83 0 0 0 4 4 4 4 0 1 1-4-4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.9 4.9 1.4 1.4"/><path d="m17.7 17.7 1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.3 17.7-1.4 1.4"/><path d="m19.1 4.9-1.4 1.4"/>',
+  warning: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+  sparkles: '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>',
+  home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  card: '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
+  star: '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>',
+  repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+  more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+};
+
+export function icon(name, cls = '') {
+  const paths = ICON_PATHS[name];
+  if (!paths) return '';
+  return `<svg class="icon${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
+}
+
 // ---------- Formatters ----------
 
 export const fmtMoney = (n) => {
@@ -117,6 +146,19 @@ export function initTopbar() {
   initTabDrag();
   if (isMobile()) initMobileNav();
 
+  // Swap emoji glyphs in the static topbar HTML for SVG icons (single code
+  // point for all 8 pages — the HTML files stay dumb).
+  const undoBtn0 = document.getElementById('btn-undo');
+  if (undoBtn0) undoBtn0.innerHTML = icon('undo');
+  const refreshBtn = document.getElementById('btn-refresh');
+  if (refreshBtn) refreshBtn.innerHTML = `${icon('refresh', 'sm')}Refresh`;
+  const historyLink = document.querySelector('.top-actions a[href="history.html"]');
+  if (historyLink) historyLink.innerHTML = icon('history');
+  const settingsBtn = document.getElementById('btn-settings');
+  if (settingsBtn) settingsBtn.innerHTML = icon('settings');
+
+  initThemeToggle();
+
   // hook up Save / Refresh / Settings / Undo buttons, if present
   document.getElementById('btn-save')?.addEventListener('click', () => {
     // In guest mode the save button becomes a login prompt — never call onSave
@@ -176,6 +218,46 @@ export function initTopbar() {
   });
 }
 
+// ---------- Theme toggle ----------
+
+// Cycles Auto → Light → Dark. js/theme.js (classic script in <head>) applies
+// the stored value before first paint and exposes window.otlApplyTheme.
+const THEME_KEY = 'otl.theme';
+const THEME_CYCLE = ['auto', 'light', 'dark'];
+const THEME_META = {
+  auto:  { icon: 'sunmoon', label: 'Theme: auto (follows OS)' },
+  light: { icon: 'sun',     label: 'Theme: light' },
+  dark:  { icon: 'moon',    label: 'Theme: dark' },
+};
+
+function getTheme() {
+  const t = localStorage.getItem(THEME_KEY);
+  return t === 'light' || t === 'dark' ? t : 'auto';
+}
+
+function initThemeToggle() {
+  const settingsBtn = document.getElementById('btn-settings');
+  if (!settingsBtn || document.getElementById('btn-theme')) return;
+  const btn = document.createElement('button');
+  btn.id = 'btn-theme';
+  btn.className = 'btn';
+  const render = () => {
+    const t = getTheme();
+    btn.innerHTML = icon(THEME_META[t].icon);
+    btn.title = THEME_META[t].label;
+  };
+  btn.addEventListener('click', () => {
+    const next = THEME_CYCLE[(THEME_CYCLE.indexOf(getTheme()) + 1) % THEME_CYCLE.length];
+    if (next === 'auto') localStorage.removeItem(THEME_KEY);
+    else localStorage.setItem(THEME_KEY, next);
+    window.otlApplyTheme?.(next === 'auto' ? null : next);
+    render();
+    toast(`Theme: ${next}`, 'info');
+  });
+  render();
+  settingsBtn.insertAdjacentElement('beforebegin', btn);
+}
+
 function updateDemoBanner(guest) {
   const existing = document.getElementById('demo-banner');
   if (guest) {
@@ -184,7 +266,7 @@ function updateDemoBanner(guest) {
     banner.id = 'demo-banner';
     banner.className = 'demo-banner';
     banner.innerHTML = `
-      <span>🎭 Demo mode — changes are not saved</span>
+      <span>${icon('sparkles', 'sm')} Demo mode — changes are not saved</span>
       <button class="btn demo-login-btn" id="demo-login-btn">Login to save your data</button>
     `;
     // Insert right after the nav tabs so it sits below the topbar
@@ -432,6 +514,27 @@ export function whoPill(who) {
   return `<span class="pill ${cls}">${label}</span>`;
 }
 
+// Quieter alternative to whoPill for dense tables: colored dot + plain text.
+export function whoDot(who) {
+  const cls = WHO_CLASS[who] || '';
+  const label = WHO_LABEL[who] || who || '';
+  return `<span class="who-dot ${cls}"></span><span class="who-plain">${label}</span>`;
+}
+
+// ---------- Page header ----------
+
+// Title row rendered at the top of each tab: name + item count + primary action.
+// countText and actionsHTML are optional; actionsHTML is raw HTML (caller escapes).
+export function pageHeaderHTML(title, countText = '', actionsHTML = '') {
+  return `
+    <div class="page-header">
+      <h1>${escapeHTML(title)}</h1>
+      ${countText ? `<span class="page-count">${escapeHTML(countText)}</span>` : ''}
+      ${actionsHTML ? `<div class="page-actions">${actionsHTML}</div>` : ''}
+    </div>
+  `;
+}
+
 // ---------- Month view context ----------
 
 // The month-browsing pages (bills, perks) let you navigate away from the current
@@ -474,7 +577,7 @@ export function monthBannerHTML(ym) {
     : `${off} months ahead`;
   return `
     <div class="month-banner ${off < 0 ? 'past' : 'future'}">
-      <span>📅</span>
+      ${icon('calendar', 'sm')}
       <span>Viewing <b>${fullMonthLabel(ym)}</b> — ${rel}</span>
       <button class="btn month-today-btn" data-month-today>Back to today</button>
     </div>
@@ -637,10 +740,10 @@ function initMobileNav() {
   const path = window.location.pathname.split('/').pop() || 'dashboard.html';
 
   const mainPages = [
-    { href: 'dashboard.html',     icon: '⌂', label: 'Home'  },
-    { href: 'bills.html',         icon: '≋',  label: 'Bills' },
-    { href: 'perks.html',         icon: '★',  label: 'Perks' },
-    { href: 'subscriptions.html', icon: '↻',  label: 'Subs'  },
+    { href: 'dashboard.html',     icon: icon('home'),   label: 'Home'  },
+    { href: 'bills.html',         icon: icon('card'),   label: 'Bills' },
+    { href: 'perks.html',         icon: icon('star'),   label: 'Perks' },
+    { href: 'subscriptions.html', icon: icon('repeat'), label: 'Subs'  },
   ];
   const morePages = [
     { href: 'vesting.html',    label: 'Vesting'    },
@@ -665,7 +768,7 @@ function initMobileNav() {
 
   const moreBtn = document.createElement('button');
   moreBtn.className = 'mobile-nav-item' + (isMoreActive ? ' active' : '');
-  moreBtn.innerHTML = `<span class="mobile-nav-icon">···</span><span class="mobile-nav-label">More</span>`;
+  moreBtn.innerHTML = `<span class="mobile-nav-icon">${icon('more')}</span><span class="mobile-nav-label">More</span>`;
   moreBtn.addEventListener('click', () => {
     showBottomSheet({
       title: 'More',

@@ -1,5 +1,5 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu, amountModal, confirmModal, closeOnEscape } from '../core/ui.js';
+import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu, amountModal, confirmModal, closeOnEscape, pageHeaderHTML } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
 import {
   escapeHTML, escapeAttr,
@@ -92,6 +92,9 @@ function render({ data, loading }) {
   const nextEvent = [...upcoming].sort((a, b) => a.date.localeCompare(b.date))[0];
 
   page.innerHTML = `
+    ${pageHeaderHTML('Vesting', `${upcoming.length} upcoming`,
+      `<button class="btn" id="btn-grants">Grants…</button>
+       <button class="btn primary" id="btn-add">+ Add event</button>`)}
     ${summaryHTML({ nextEvent, next90Value, totalUpcomingValue, soldYTD, upcomingCount: upcoming.length, data })}
     ${stockPricesHTML(data)}
     ${renderEvents(data)}
@@ -199,8 +202,6 @@ function renderEvents(data) {
         <option value="all">All grants</option>
         ${data.grants.map(g => `<option value="${g.id}" ${ui.grant === g.id ? 'selected' : ''}>${escapeHTML(grantLabel(g))}</option>`).join('')}
       </select>
-      <button class="btn" id="btn-grants">Grants…</button>
-      <button class="btn primary" id="btn-add">+ Add event</button>
     </div>
   `;
 

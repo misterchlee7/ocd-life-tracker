@@ -1,5 +1,5 @@
 import { state } from '../core/state.js';
-import { bootstrap, whoPill, fmtMoney, fmtMoneyShort, toast } from '../core/ui.js';
+import { bootstrap, whoPill, fmtMoney, fmtMoneyShort, toast, pageHeaderHTML, icon } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday, periodFor, nextOccurrence } from '../core/dates.js';
 import { paymentFor, getAttentionItems, cadenceAnchorMonth } from '../core/derive.js';
 import { escapeHTML } from '../core/text.js';
@@ -90,7 +90,10 @@ function render({ data, loading }) {
   }
   billsDueThisWeek.sort((a, b) => a.nextDate.localeCompare(b.nextDate));
 
+  const todayLabel = new Date(today + 'T00:00:00')
+    .toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   page.innerHTML = `
+    ${pageHeaderHTML('Dashboard', todayLabel)}
     ${summaryHTML({ pendingMonth, monthlySubs, perksAvailable, upcomingVestingShares, upcomingVesting })}
     ${attentionHubHTML(zone1, zone2)}
     <div class="dash-grid">
@@ -166,7 +169,7 @@ function attentionZoneHTML(zone, title, items) {
   return `
     <div class="attention-zone zone-${zone}">
       <div class="attention-zone-title">
-        ${zone === 1 ? '⚡' : '🕐'} ${title}
+        ${zone === 1 ? icon('warning', 'sm') : icon('history', 'sm')} ${title}
         <span class="attention-count">${items.length}</span>
       </div>
       ${rows}

@@ -139,7 +139,8 @@
   }
   .mobile-nav-item.active { color: var(--accent); }
   .mobile-nav-item:active { opacity: 0.7; }
-  .mobile-nav-icon { font-size: 19px; line-height: 1; }
+  .mobile-nav-icon { font-size: 19px; line-height: 1; display: inline-flex; }
+  .mobile-nav-icon .icon { width: 20px; height: 20px; }
   .mobile-nav-label { font-size: 10px; font-weight: 500; letter-spacing: 0.01em; }
 
   /* ---- Mobile card list ---- */
@@ -202,8 +203,8 @@
     -webkit-tap-highlight-color: transparent;
   }
   .m-action-btn.primary  { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .m-action-btn.success  { background: var(--s-paid-bg); color: var(--s-paid-fg); border-color: #b4e4bf; }
-  .m-action-btn.warn     { background: var(--s-need-bg); color: var(--s-need-fg); border-color: #f1c271; }
+  .m-action-btn.success  { background: var(--s-paid-bg); color: var(--s-paid-fg); border-color: light-dark(#b4e4bf, #2e4a32); }
+  .m-action-btn.warn     { background: var(--s-need-bg); color: var(--s-need-fg); border-color: var(--s-need-border); }
   .m-action-btn.muted    { background: var(--s-skip-bg); color: var(--s-skip-fg); border-color: var(--border-strong); }
   .m-action-btn:active   { filter: brightness(0.95); }
 

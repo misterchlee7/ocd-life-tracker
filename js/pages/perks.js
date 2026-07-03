@@ -2,7 +2,7 @@ import { state, uid } from '../core/state.js';
 import {
   bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL,
   positionMenu, confirmModal, closeOnEscape,
-  monthNavClass, monthNavLabelHTML, monthBannerHTML,
+  monthNavClass, monthNavLabelHTML, monthBannerHTML, pageHeaderHTML,
 } from '../core/ui.js';
 import { periodFor, todayISO, shortDate } from '../core/dates.js';
 import { claimsFor } from '../core/derive.js';
@@ -166,6 +166,8 @@ function render({ data, loading }) {
   const netRoi = claimedYTD - totalAnnualFees;
 
   page.innerHTML = `
+    ${pageHeaderHTML('Perks', `${allActive.length} active`,
+      `<button class="btn primary" id="btn-add">+ Add perk</button>`)}
     ${monthBannerHTML(ui.month)}
     ${summaryHTML({ monthlyAvailable, nonMonthlyAvailable, claimedYTD, netRoi, totalAnnualFees })}
     ${filtersHTML(data)}
@@ -220,7 +222,6 @@ function filtersHTML(data) {
         ${Object.entries(STATUS_LABELS).map(([k, v]) =>
           `<option value="${k}" ${ui.status === k ? 'selected' : ''}>${v}</option>`).join('')}
       </select>
-      <button class="btn primary" id="btn-add">+ Add perk</button>
       <div class="month-nav">
         <button class="icon-btn" id="nav-prev" title="Previous">‹</button>
         <div class="month-label ${monthNavClass(ui.month)}">${monthNavLabelHTML(ui.month)}</div>

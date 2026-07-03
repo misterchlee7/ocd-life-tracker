@@ -1,5 +1,5 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu, confirmModal, closeOnEscape } from '../core/ui.js';
+import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu, confirmModal, closeOnEscape, icon, pageHeaderHTML } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
 import {
   escapeHTML, escapeAttr, truncate, FREQ_LABELS,
@@ -138,6 +138,8 @@ function render({ data, loading }) {
   const hasMonthly    = filteredMonthly.length > 0;
 
   page.innerHTML = `
+    ${pageHeaderHTML('Subscriptions', `${active.length} active`,
+      `<button class="btn primary" id="btn-add">+ Add subscription</button>`)}
     ${summaryHTML({ count: active.length, grossMonthly, subsidizedMonthly, subsidizedCount: subsidizedSubs.length, netMonthly, upcoming30, trialsExpiring })}
     ${trialsExpiring.length ? trialBannerHTML(trialsExpiring) : ''}
     ${filtersHTML()}
@@ -155,7 +157,7 @@ function render({ data, loading }) {
 function summaryHTML({ count, grossMonthly, subsidizedMonthly, subsidizedCount, netMonthly, upcoming30, trialsExpiring }) {
   const upcomingTotal = upcoming30.reduce((a, s) => a + (s.amount || 0), 0);
   return `
-    <div class="summary">
+    <div class="summary summary-5">
       <div class="card">
         <div class="label">Active subs</div>
         <div class="value">${count}</div>
@@ -189,7 +191,7 @@ function trialBannerHTML(trials) {
   const first = trials[0];
   return `
     <div class="nag">
-      ⚠️ <b>${trials.length} trial${trials.length === 1 ? '' : 's'} ending soon.</b>
+      ${icon('warning', 'sm')} <b>${trials.length} trial${trials.length === 1 ? '' : 's'} ending soon.</b>
       ${first.name} ends ${relativeDays(first.trial_ends)}${trials.length > 1 ? ` · +${trials.length - 1} more` : ''}
     </div>
   `;
@@ -213,7 +215,6 @@ function filtersHTML() {
         <option value="all">All statuses</option>
         ${FILTER_STATUSES.map(s => `<option value="${s}" ${ui.status === s ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`).join('')}
       </select>
-      <button class="btn primary" id="btn-add">+ Add subscription</button>
     </div>
   `;
 }

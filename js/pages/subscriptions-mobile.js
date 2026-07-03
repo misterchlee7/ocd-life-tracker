@@ -1,5 +1,5 @@
 import { state } from '../core/state.js';
-import { bootstrap, showBottomSheet, whoPill, fmtMoney, fmtMoneyShort, toast } from '../core/ui.js';
+import { bootstrap, showBottomSheet, whoPill, fmtMoney, fmtMoneyShort, toast, icon } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
 import { escapeHTML, SUB_STATUS_LABELS as STATUS_LABELS, SUB_CAT_LABELS as CAT_LABELS } from '../core/text.js';
 
@@ -165,7 +165,7 @@ function render({ data, loading }) {
     s.status === 'trial' && s.trial_ends && daysFromToday(s.trial_ends) >= 0 && daysFromToday(s.trial_ends) <= 14
   );
   const trialBanner = trialsExpiring.length
-    ? `<div class="nag" style="margin-bottom:10px">⚠️ <b>${trialsExpiring.length} trial${trialsExpiring.length !== 1 ? 's' : ''} ending soon</b> — ${escapeHTML(trialsExpiring[0].name)}${trialsExpiring.length > 1 ? ` · +${trialsExpiring.length - 1} more` : ''}</div>`
+    ? `<div class="nag" style="margin-bottom:10px">${icon('warning', 'sm')} <b>${trialsExpiring.length} trial${trialsExpiring.length !== 1 ? 's' : ''} ending soon</b> — ${escapeHTML(trialsExpiring[0].name)}${trialsExpiring.length > 1 ? ` · +${trialsExpiring.length - 1} more` : ''}</div>`
     : '';
 
   const listHTML = subs.length === 0

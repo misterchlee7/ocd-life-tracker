@@ -1,5 +1,5 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, isMobile, whoPill, toast, positionMenu, confirmModal, closeOnEscape } from '../core/ui.js';
+import { bootstrap, isMobile, whoPill, toast, positionMenu, confirmModal, closeOnEscape, pageHeaderHTML } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
 import {
   escapeHTML, escapeAttr, truncate,
@@ -87,6 +87,8 @@ function render({ data, loading }) {
   const filtered = sortWarranties(filterWarranties(data));
 
   page.innerHTML = `
+    ${pageHeaderHTML('Warranties', `${active.length} active`,
+      `<button class="btn primary" id="btn-add">+ Add warranty</button>`)}
     ${summaryHTML({ activeCount: active.length, expiredCount: expired.length, expiring90Count: expiring90.length, nextExpiry })}
     ${filtersHTML(data)}
     ${filtered.length === 0
@@ -145,7 +147,6 @@ function filtersHTML(data) {
       <label class="chip ${ui.showExpired ? 'active' : ''}" style="cursor:pointer">
         <input type="checkbox" id="f-expired" ${ui.showExpired ? 'checked' : ''} style="display:none"> Show expired
       </label>
-      <button class="btn primary" id="btn-add">+ Add warranty</button>
     </div>
   `;
 }

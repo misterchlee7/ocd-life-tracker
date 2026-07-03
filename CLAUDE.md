@@ -40,6 +40,7 @@ Only 2 users (Chang + Kiju). Desktop-first for data entry; mobile has a dedicate
 │   └── mobile.css          # mobile-only styles: bottom nav, bottom sheet, card primitives, filter chips
 │
 ├── js/
+│   ├── theme.js            # classic (non-module) head script: applies otl.theme before first paint
 │   ├── core/
 │   │   ├── config.js       # repo + file path constants, localStorage keys
 │   │   ├── github.js       # GitHub API client (fetchData, putData, friendly 401/403/404/409 errors)
@@ -229,7 +230,11 @@ Loaded on all pages via `<link>`. Sections:
 - **Bill payment mutations go through `js/core/actions.js`.** `schedulePending` / `recordPaid` / `recordSkip` / `setPaidAmount` / `markCardUsed` / `clearPayment` encode the domain rules — including that `recordPaid` does **not** touch `last_used` (see the CC `last_used` rule above). Desktop and mobile bills call the same functions inside `state.mutate()` — never re-implement these inline, or the two platforms will silently diverge.
 - **`statusForRow(data, bill, monthISO)` lives in derive.js** (includes the scheduled → needs_confirm auto-advance). Don't duplicate it in pages.
 - **`nextOccurrence(day, freq, fromISO, anchorMonth)`** clamps the day to the month length (day 31 stays in April) and optionally phase-aligns non-monthly cadences to a known cadence month; get `anchorMonth` from `cadenceAnchorMonth(data, bill)` (derived from the latest payment). Note: `bills.js`'s own `nextDueDateForBill()` solves a similar phase-alignment problem locally for the year-progress "next due" display — the two aren't unified, that's a known duplication, not a bug.
-- **Dark mode is variable-driven.** `app.css` has a `prefers-color-scheme: dark` block. Never hardcode neutral colors in CSS or inline styles — use the surface variables (`--surface`, `--hover`, `--hover-subtle`, `--hover-accent`, `--th-bg`, `--day-bg`, `--seg-bg`, `--danger-hover-bg`) and semantic text colors (`--red-fg`, `--amber-fg`, `--green-fg`). New tinted chips/badges need a matching override in the dark block.
+- **Dark mode is `light-dark()`-driven.** There is NO separate dark block in `app.css` — every color token is defined once as `light-dark(lightVal, darkVal)`, resolved by the `color-scheme` property on `:root`. Never hardcode neutral colors in CSS or inline styles — use the surface variables (`--surface`, `--hover`, `--hover-subtle`, `--hover-accent`, `--th-bg`, `--day-bg`, `--seg-bg`, `--danger-hover-bg`) and semantic text colors (`--red-fg`, `--amber-fg`, `--green-fg`). A new tinted chip/badge gets a `light-dark()` pair inline (or a new var) — never a `prefers-color-scheme` override; a same-specificity override placed before the base rule silently loses the cascade (this exact bug shipped once; the `light-dark()` rewrite killed the class).
+- **Theme is user-togglable.** `js/theme.js` (classic non-module script in every page `<head>`, runs before first paint; CSP-safe under `script-src 'self'`) applies `localStorage['otl.theme']` (`'light'`/`'dark'`, absent = follow OS) by setting `documentElement.style.colorScheme`, and syncs the `theme-color` metas via `window.otlApplyTheme`. The topbar toggle (`#btn-theme`, injected by `initTopbar()`) cycles Auto → Light → Dark.
+- **UI chrome icons are inline SVG** via `icon(name, cls)` in `ui.js` (Lucide outlines, `currentColor`, sized by `.icon`/`.icon.sm` in app.css). Never use emoji for chrome (topbar, nav, banners, attention-zone titles) — it renders differently per OS. Emoji inside row-menu / bottom-sheet item labels is tolerated legacy (`showBottomSheet` escapes `icon`, so SVG can't be injected there anyway).
+- **Page headers.** Every tab renders `pageHeaderHTML(title, countText, actionsHTML)` (from ui.js) at the top: page name + item count + the page's primary "+ Add …" button (moved out of the filters bar). Wiring ids (`btn-add`, `btn-add-bill`, `btn-grants`) are unchanged.
+- **Bills row de-noise.** Who column uses `whoDot(who)` (colored dot + plain text, ui.js) instead of `whoPill`; bill type renders as muted uppercase text (`.bill-type-plain`), not a pill — the status pill stays the only pill in a bills row. The Pending summary card carries `.card.primary` (accent left border + tint); keep it the sole primary card per page.
 
 ## When making changes
 
@@ -251,6 +256,7 @@ Loaded on all pages via `<link>`. Sections:
 | `otl.cache` | JSON string of last-fetched data.json | state.cacheWrite() |
 | `otl.sha` | SHA of last-fetched data.json | state.cacheWrite() |
 | `otl.tab_order` | JSON array of `href` strings | Tab drag-to-reorder |
+| `otl.theme` | `light` or `dark` (absent = follow OS) | Topbar theme toggle |
 
 Note: `otl.cache` and `otl.sha` are explicitly purged by `state.exitGuestMode()` to prevent any stale or demo data from persisting after login.
 
@@ -273,7 +279,7 @@ Every `state.mutate()` call appends `{ ts, label }` to `data.history` (rolling c
 ## PWA + dark mode
 
 - All 8 HTML pages (7 tabs + history.html) link `manifest.json`, `icons/icon.svg` (favicon), and `icons/apple-touch-icon.png`, with `theme-color` metas for both color schemes. Add to Home Screen on iOS/Android gives a standalone app window starting at the dashboard. No service worker (online-only by design).
-- Dark mode follows the OS via `prefers-color-scheme` — no toggle, no JS. See the Conventions bullet for the variable rules.
+- Dark mode follows the OS by default; the topbar toggle (Auto/Light/Dark, persisted as `otl.theme`) forces either. Colors resolve via CSS `light-dark()` + `color-scheme` — see the Conventions bullets for the rules.
 - The nav tab for bills.html is labeled **"Bills"** everywhere (desktop tabs + mobile nav) — not "Payments".
 
 ## Tests

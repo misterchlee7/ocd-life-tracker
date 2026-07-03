@@ -1,8 +1,9 @@
 import { state, uid } from '../core/state.js';
 import {
-  bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL,
+  bootstrap, isMobile, whoDot, fmtMoney, fmtMoneyShort, toast, WHO_LABEL,
   positionMenu, amountModal, confirmModal, closeOnEscape,
   monthOffset, monthNavClass, monthNavLabelHTML, monthBannerHTML,
+  icon, pageHeaderHTML,
 } from '../core/ui.js';
 import { periodFor, todayISO, shortDate, daysFromToday, nextOccurrence, FREQUENCIES } from '../core/dates.js';
 import { paymentFor, yearProgress, rotation, needsConfirm, statusForRow, billStatusDisplay } from '../core/derive.js';
@@ -209,7 +210,7 @@ function summaryHTML(data) {
 
   return `
     <div class="summary summary-5">
-      <div class="card clickable-card" data-breakdown="pending">
+      <div class="card primary clickable-card" data-breakdown="pending">
         <div class="label">${monthScopeLabel('Pending')}</div>
         <div class="value">${fmtMoney(pendingMonth)}</div>
         <div class="sub">${pendingWhoSub || '&nbsp;'}</div>
@@ -263,7 +264,6 @@ function filtersHTML() {
       </div>
       <select class="select" id="f-type">${typeOptions}</select>
       <select class="select" id="f-status">${statusOptions}</select>
-      <button class="btn primary" id="btn-add-bill">+ Add bill</button>
       <div class="month-nav">
         <button class="icon-btn" id="m-prev" title="Previous month">‹</button>
         <div class="month-label ${monthNavClass(ui.month)}">${monthNavLabelHTML(ui.month)}</div>
@@ -486,7 +486,7 @@ function tableHTML(data) {
     const rewards = rewardsFmt
       ? `<td class="num center tight rewards${rewardsEditable ? ' editable-cell' : ''}" data-rewards-bill-id="${b.id}" data-sort="${b.cc.rewards_balance}">${rewardsFmt}</td>`
       : `<td class="num center tight rewards zero${rewardsEditable ? ' editable-cell' : ''}" data-rewards-bill-id="${b.id}" data-sort="0">—</td>`;
-    const typePill = b.type ? `<span class="pill type tiny bill-type-inline">${BILL_TYPE_LABELS[b.type] || b.type}</span>` : '';
+    const typePill = b.type ? `<span class="bill-type-plain">${BILL_TYPE_LABELS[b.type] || b.type}</span>` : '';
     const noteLine = b.notes
       ? `<div class="bill-note" data-note-bill-id="${b.id}" title="${escapeAttr(b.notes)}">${escape(b.notes)}</div>`
       : `<div class="bill-note" data-note-bill-id="${b.id}"></div>`;
@@ -494,7 +494,7 @@ function tableHTML(data) {
     return `${prefix}<tr data-bill-id="${b.id}">
       <td class="tight" data-sort="${b.day ?? 99}"><span class="day">${b.day ?? '—'}</span></td>
       <td data-sort="${escapeAttr(b.brand + ' ' + b.name)}"><b>${escape(b.brand)}</b> — ${escape(b.name)} ${typePill}${aprBadge(b)}${dueBadge(b)}${noteLine}</td>
-      <td class="tight" data-sort="${b.who || ''}">${whoPill(b.who)}</td>
+      <td class="tight" data-sort="${b.who || ''}">${whoDot(b.who)}</td>
       ${amountCell(b, year)}
       <td class="tight" data-sort="${status}">${statusPill(status, payment, b)}${periodRangeLabel(b.frequency, period)}</td>
       ${paymentCell}
@@ -542,7 +542,7 @@ function attentionHTML(data) {
   const more = nc.length > 1 ? ` · and ${nc.length - 1} more` : '';
   return `
     <div class="nag">
-      ⚠️ <div><b>${escape(bill.brand)} — ${escape(bill.name)}</b> — scheduled ${fmtMoney(first.pending_amount)} on ${shortDate(first.scheduled_date)}. Payment day has passed — did it post?${more}</div>
+      ${icon('warning', 'sm')} <div><b>${escape(bill.brand)} — ${escape(bill.name)}</b> — scheduled ${fmtMoney(first.pending_amount)} on ${shortDate(first.scheduled_date)}. Payment day has passed — did it post?${more}</div>
       <div class="nag-actions">
         <button class="btn" data-confirm-payment-id="${first.id}">Confirm paid</button>
       </div>
@@ -561,7 +561,10 @@ function render(snap) {
     return;
   }
 
+  const activeCount = data.bills.filter(b => !b.archived).length;
   page.innerHTML =
+    pageHeaderHTML('Bills', `${activeCount} active`,
+      `<button class="btn primary" id="btn-add-bill">+ Add bill</button>`) +
     monthBannerHTML(ui.month) +
     summaryHTML(data) +
     attentionHTML(data) +
