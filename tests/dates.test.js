@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  periodFor, nextOccurrence, daysBetween, occurrencesPerYear,
+  periodFor, nextOccurrence, daysBetween, occurrencesPerYear, todayISO,
 } from '../js/core/dates.js';
 import {
   yearProgress, statusForRow, cadenceAnchorMonth, rotation, getAttentionItems,
@@ -81,6 +81,31 @@ test('nextOccurrence: biannual anchor across year boundary', () => {
   assert.equal(nextOccurrence(10, 'biannual', '2026-12-20', 5), '2027-06-10');
 });
 
+test('nextOccurrence: occurrence on fromISO itself counts (not pushed to next cycle)', () => {
+  assert.equal(nextOccurrence(15, 'monthly', '2026-07-15'), '2026-07-15');
+});
+
+test('nextOccurrence: anchorMonth ignored for monthly', () => {
+  // step=1 — anchor must not shift a monthly bill
+  assert.equal(nextOccurrence(15, 'monthly', '2026-02-01', 6), '2026-02-15');
+});
+
+test('nextOccurrence: phase-align overflows past December into next year', () => {
+  // quarterly anchored Jan (cadence Jan/Apr/Jul/Oct), from Nov → Jan next year
+  assert.equal(nextOccurrence(15, 'quarterly', '2026-11-01', 0), '2027-01-15');
+});
+
+test('nextOccurrence: phase-align + day clamp combined', () => {
+  // quarterly anchored Feb, day 31 → lands Feb 28, not Mar 3
+  assert.equal(nextOccurrence(31, 'quarterly', '2026-01-01', 1), '2026-02-28');
+});
+
+test('nextOccurrence: multi-year cadence steps whole years', () => {
+  assert.equal(nextOccurrence(10, 'biennial', '2026-07-01'), '2026-07-10');
+  // already passed this year → +2 years, same month
+  assert.equal(nextOccurrence(10, 'biennial', '2026-07-15'), '2028-07-10');
+});
+
 test('nextOccurrence: one_time / variable / missing day → null', () => {
   assert.equal(nextOccurrence(10, 'one_time', '2026-07-01'), null);
   assert.equal(nextOccurrence(10, 'variable', '2026-07-01'), null);
@@ -94,6 +119,12 @@ test('daysBetween: sign and DST safety', () => {
   assert.equal(daysBetween('2026-07-04', '2026-07-01'), -3);
   // spans US DST transition (Mar 8 2026)
   assert.equal(daysBetween('2026-03-07', '2026-03-09'), 2);
+});
+
+test('daysBetween: year boundary and leap day', () => {
+  assert.equal(daysBetween('2027-12-31', '2028-01-01'), 1);
+  assert.equal(daysBetween('2028-02-28', '2028-03-01'), 2); // 2028 leap
+  assert.equal(daysBetween('2027-02-28', '2027-03-01'), 1); // non-leap
 });
 
 test('occurrencesPerYear: known cadences', () => {
@@ -119,6 +150,37 @@ test('yearProgress: counts paid periods in the year, capped at total', () => {
 
 test('yearProgress: null for monthly/variable', () => {
   assert.equal(yearProgress({ payments: [] }, { id: 'x', frequency: 'monthly' }, 2026), null);
+});
+
+test('yearProgress: filled never exceeds total (duplicate period records)', () => {
+  const bill = { id: 'b1', frequency: 'annual' };
+  const data = {
+    payments: [
+      { bill_id: 'b1', period: '2026', status: 'paid' },
+      { bill_id: 'b1', period: '2026', status: 'paid' }, // duplicate — must not overflow the bar
+    ],
+  };
+  assert.deepEqual(yearProgress(data, bill, 2026), { filled: 1, total: 1 });
+});
+
+// ---------- derive: rotation ----------
+
+test('rotation: null without last_used', () => {
+  assert.equal(rotation({ cc: {} }), null);
+  assert.equal(rotation({}), null);
+});
+
+test('rotation: fresh / warn / stale tiers at default 6-month target', () => {
+  // warn kicks in at 87.5% of target (5.25 mo = ~157 days); stale at 6 mo (180 days)
+  assert.equal(rotation({ cc: { last_used: isoDaysFromNow(-30) } }).level, 'fresh');
+  assert.equal(rotation({ cc: { last_used: isoDaysFromNow(-165) } }).level, 'warn');
+  assert.equal(rotation({ cc: { last_used: isoDaysFromNow(-190) } }).level, 'stale');
+});
+
+test('rotation: custom target rescales the tiers', () => {
+  // 100 days ≈ 3.3 mo — stale against a 3-month target, fresh against 6
+  assert.equal(rotation({ cc: { last_used: isoDaysFromNow(-100) } }, 3).level, 'stale');
+  assert.equal(rotation({ cc: { last_used: isoDaysFromNow(-100) } }, 6).level, 'fresh');
 });
 
 // ---------- derive: statusForRow ----------
@@ -147,6 +209,27 @@ test('statusForRow: scheduled in the future stays scheduled', () => {
   assert.equal(statusForRow(data, bill, '2026-07').status, 'scheduled');
 });
 
+test('statusForRow: scheduled TODAY stays scheduled (strict < comparison)', () => {
+  const data = {
+    payments: [{ bill_id: 'b1', period: periodFor(`${todayISO().slice(0, 7)}-01`, 'monthly'), status: 'scheduled', scheduled_date: todayISO() }],
+  };
+  const bill = { id: 'b1', frequency: 'monthly' };
+  assert.equal(statusForRow(data, bill, todayISO().slice(0, 7)).status, 'scheduled');
+});
+
+test('statusForRow: quarterly bill — any month in the quarter maps to the same record', () => {
+  const data = {
+    payments: [{ bill_id: 'b1', period: '2026-Q2', status: 'paid' }],
+  };
+  const bill = { id: 'b1', frequency: 'quarterly' };
+  for (const m of ['2026-04', '2026-05', '2026-06']) {
+    const r = statusForRow(data, bill, m);
+    assert.equal(r.status, 'paid', `month ${m}`);
+    assert.equal(r.period, '2026-Q2');
+  }
+  assert.equal(statusForRow(data, bill, '2026-07').status, 'unpaid'); // Q3 — fresh period
+});
+
 // ---------- derive: cadenceAnchorMonth ----------
 
 test('cadenceAnchorMonth: derives month from latest payment', () => {
@@ -163,6 +246,28 @@ test('cadenceAnchorMonth: derives month from latest payment', () => {
 test('cadenceAnchorMonth: null for monthly or no payments', () => {
   assert.equal(cadenceAnchorMonth({ payments: [] }, { id: 'b1', frequency: 'quarterly' }), null);
   assert.equal(cadenceAnchorMonth({ payments: [] }, { id: 'b1', frequency: 'monthly' }), null);
+});
+
+test('cadenceAnchorMonth: prefers scheduled_date over paid_date on the same record', () => {
+  const data = {
+    payments: [{ bill_id: 'b1', period: '2026-Q3', status: 'paid', scheduled_date: '2026-08-05', paid_date: '2026-09-01' }],
+  };
+  assert.equal(cadenceAnchorMonth(data, { id: 'b1', frequency: 'quarterly' }), 7); // Aug, not Sep
+});
+
+test('cadenceAnchorMonth: skips dateless records to find the latest usable one', () => {
+  const data = {
+    payments: [
+      { bill_id: 'b1', period: '2026-Q3', status: 'skipped' }, // newest but no dates
+      { bill_id: 'b1', period: '2026-Q2', status: 'paid', paid_date: '2026-04-10' },
+    ],
+  };
+  assert.equal(cadenceAnchorMonth(data, { id: 'b1', frequency: 'quarterly' }), 3); // April
+  // all records dateless → null
+  assert.equal(cadenceAnchorMonth(
+    { payments: [{ bill_id: 'b1', period: '2026-Q1', status: 'skipped' }] },
+    { id: 'b1', frequency: 'quarterly' },
+  ), null);
 });
 
 // ---------- derive: dueMonthInfo ----------
@@ -227,6 +332,12 @@ test('billStatusDisplay: monthly unpaid stays Unpaid', () => {
   assert.deepEqual(billStatusDisplay(data, bill, 'unpaid', '2026-02'), { key: 'unpaid', label: 'Unpaid' });
 });
 
+test('billStatusDisplay: one_time / variable unpaid stays Unpaid (no due-month remap)', () => {
+  const data = { payments: [] };
+  assert.deepEqual(billStatusDisplay(data, { id: 'b1', frequency: 'one_time' }, 'unpaid', '2026-07'), { key: 'unpaid', label: 'Unpaid' });
+  assert.deepEqual(billStatusDisplay(data, { id: 'b1', frequency: 'variable' }, 'unpaid', '2026-07'), { key: 'unpaid', label: 'Unpaid' });
+});
+
 test('billStatusDisplay: non-monthly unpaid before due month → "Not due · <Mon>"', () => {
   const data = { payments: [] }; // no history → calendar-period-end fallback (Mar for Q1)
   const bill = { id: 'b1', frequency: 'quarterly' };
@@ -251,10 +362,12 @@ test('billStatusDisplay: uses payment history to phase-align the due month', () 
 
 // ---------- derive: getAttentionItems (non_renewing subscriptions) ----------
 
+// Local-date version — toISOString() is UTC and can be a day off near midnight
+// in non-UTC timezones, which would flip boundary-sensitive assertions.
 function isoDaysFromNow(n) {
   const d = new Date();
   d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function emptyData(subscriptions) {
