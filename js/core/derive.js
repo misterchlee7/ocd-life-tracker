@@ -147,6 +147,23 @@ export function getAttentionItems(data) {
     }
   }
 
+  // Non-renewing subscriptions whose end date has passed — confirm as cancelled
+  for (const s of (data.subscriptions || [])) {
+    if (s.archived || s.status !== 'non_renewing' || !s.next_renewal) continue;
+    const days = daysFromToday(s.next_renewal);
+    if (days < 0) {
+      const ago = days === -1 ? 'yesterday' : `${-days}d ago`;
+      items.push({
+        zone: 1,
+        kind: 'sub_ended',
+        label: s.name,
+        detail: `Ended ${ago} · confirm cancelled`,
+        link: 'subscriptions.html',
+        sub_id: s.id,
+      });
+    }
+  }
+
   // ── Zone 2: On Your Radar ─────────────────────────────────────────────────
 
   // 0% APR warnings
@@ -168,7 +185,7 @@ export function getAttentionItems(data) {
 
   // Non-monthly subscriptions renewing within 30 days
   for (const s of (data.subscriptions || [])) {
-    if (s.archived || s.status === 'cancelled' || s.frequency === 'monthly') continue;
+    if (s.archived || s.status === 'cancelled' || s.status === 'non_renewing' || s.frequency === 'monthly') continue;
     if (!s.next_renewal) continue;
     const days = daysFromToday(s.next_renewal);
     if (days >= 0 && days <= 30) {
@@ -179,6 +196,22 @@ export function getAttentionItems(data) {
         kind: 'sub_renewal',
         label: s.name,
         detail: `Renews ${when}${amt}`,
+        link: 'subscriptions.html',
+      });
+    }
+  }
+
+  // Non-renewing subscriptions ending within 30 days (any frequency)
+  for (const s of (data.subscriptions || [])) {
+    if (s.archived || s.status !== 'non_renewing' || !s.next_renewal) continue;
+    const days = daysFromToday(s.next_renewal);
+    if (days >= 0 && days <= 30) {
+      const when = days === 0 ? 'today' : `in ${days}d`;
+      items.push({
+        zone: 2,
+        kind: 'sub_ending',
+        label: s.name,
+        detail: `Access ends ${when} · won't renew`,
         link: 'subscriptions.html',
       });
     }

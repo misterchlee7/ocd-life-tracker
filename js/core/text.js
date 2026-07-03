@@ -59,8 +59,8 @@ export const SUB_CAT_LABELS = {
   news: 'News', storage: 'Storage', gaming: 'Gaming', shopping: 'Shopping',
   cc_annual_fee: 'CC Annual Fee', other: 'Other',
 };
-export const SUB_STATUSES = ['active', 'trial', 'paused', 'cancelled'];
-export const SUB_STATUS_LABELS = { active: 'Active', trial: 'Trial', paused: 'Paused', cancelled: 'Cancelled' };
+export const SUB_STATUSES = ['active', 'trial', 'paused', 'non_renewing', 'cancelled'];
+export const SUB_STATUS_LABELS = { active: 'Active', trial: 'Trial', paused: 'Paused', non_renewing: 'Non-renewing', cancelled: 'Cancelled' };
 
 // ---------- vesting ----------
 

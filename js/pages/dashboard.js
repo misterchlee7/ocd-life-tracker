@@ -1,5 +1,5 @@
 import { state } from '../core/state.js';
-import { bootstrap, whoPill, fmtMoney, fmtMoneyShort } from '../core/ui.js';
+import { bootstrap, whoPill, fmtMoney, fmtMoneyShort, toast } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday, periodFor, nextOccurrence } from '../core/dates.js';
 import { paymentFor, getAttentionItems, cadenceAnchorMonth } from '../core/derive.js';
 import { escapeHTML } from '../core/text.js';
@@ -13,6 +13,8 @@ const KIND_META = {
   vesting_imminent: { label: 'Vest',     cls: 'kind-vest' },
   apr_zero:         { label: 'APR',      cls: 'kind-apr' },
   sub_renewal:      { label: 'Sub',      cls: 'kind-sub' },
+  sub_ending:       { label: 'Sub',      cls: 'kind-sub' },
+  sub_ended:        { label: 'Sub',      cls: 'kind-sub' },
   warranty_expiry:  { label: 'Warranty', cls: 'kind-warranty' },
   perk_expiring:    { label: 'Perk',     cls: 'kind-perk' },
   backlog_overdue:  { label: 'Task',     cls: 'kind-task' },
@@ -96,6 +98,19 @@ function render({ data, loading }) {
       ${billsDueThisWeekPanel(billsDueThisWeek, data)}
     </div>
   `;
+
+  page.querySelectorAll('[data-confirm-sub-cancelled]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.confirmSubCancelled;
+      const sub = state.get().data?.subscriptions.find(s => s.id === id);
+      if (!sub) return;
+      state.mutate(d => {
+        const s = d.subscriptions.find(x => x.id === id);
+        if (s) s.status = 'cancelled';
+      }, `confirm cancelled: ${sub.name}`);
+      toast(`Cancelled: ${sub.name}`, 'info');
+    });
+  });
 }
 
 // ── Summary cards row ─────────────────────────────────────────────────────────
@@ -161,6 +176,9 @@ function attentionZoneHTML(zone, title, items) {
 
 function attentionItemHTML(item) {
   const meta = KIND_META[item.kind] || { label: item.kind, cls: 'kind-other' };
+  const action = item.kind === 'sub_ended'
+    ? `<button class="attention-item-confirm" data-confirm-sub-cancelled="${item.sub_id}">✓ Confirm cancelled</button>`
+    : `<a href="${item.link}" class="attention-item-link">View →</a>`;
   return `
     <div class="attention-item">
       <span class="attention-kind ${meta.cls}">${meta.label}</span>
@@ -168,7 +186,7 @@ function attentionItemHTML(item) {
         <div class="attention-item-label">${escapeHTML(item.label)}</div>
         <div class="attention-item-detail">${escapeHTML(item.detail)}</div>
       </div>
-      <a href="${item.link}" class="attention-item-link">View →</a>
+      ${action}
     </div>
   `;
 }

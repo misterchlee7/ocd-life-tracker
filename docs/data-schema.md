@@ -38,7 +38,7 @@ frequency:  "monthly" | "bimonthly" | "quarterly" | "biannual" | "semi_annual" |
 bill_type:  "cc" | "loan" | "utility" | "insurance" | "fee" | "investment" | "gift" | "other"
 bill_status (per-period): "unpaid" | "scheduled" | "needs_confirm" | "paid" | "auto" | "skipped"
 perk_status (per-period): "available" | "claimed" | "skipped" | "expired"
-sub_status: "active" | "trial" | "paused" | "cancelled"
+sub_status: "active" | "trial" | "paused" | "non_renewing" | "cancelled"
 sub_category: "streaming" | "music" | "software" | "fitness" | "news" | "storage" | "gaming" | "shopping" | "cc_annual_fee" | "other"
 warranty_category: "electronics" | "appliance" | "vehicle" | "furniture" | "tool" | "outdoor" | "clothing" | "other"
 grant_type: "rsu" | "espp"
@@ -166,8 +166,10 @@ One per period per perk, tracking status.
   "subsidized_amount": null,         // optional; partial subsidy in $. If null and billed_to is set, full amount is assumed covered.
   "amount": 10.87,
   "frequency": "monthly",
-  "next_renewal": "2026-06-06",
-  "status": "active",                // sub_status enum
+  "next_renewal": "2026-06-06",      // for status "non_renewing" this is the END date (access ends, no charge) — never rolled forward
+  "status": "active",                // sub_status enum. "non_renewing" = auto-renew turned off at the vendor but access continues;
+                                     // stays in the main table until next_renewal passes, then a Zone-1 dashboard attention item
+                                     // (kind: sub_ended) asks the user to confirm → status becomes "cancelled"
   "trial_ends": null,                // ISO date if trial
   "covered_by_perk_id": null,        // if a perk offsets this (e.g., Amex YouTube Premium credit)
   "archived": false,

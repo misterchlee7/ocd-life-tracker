@@ -713,6 +713,12 @@ td.editable-cell input.note-input { text-align: center; }
   white-space: nowrap; flex-shrink: 0; font-weight: 500;
 }
 .attention-item-link:hover { background: var(--accent); color: #fff; }
+.attention-item-confirm {
+  font: inherit; font-size: 11px; color: var(--green-fg); background: var(--surface); cursor: pointer;
+  padding: 3px 9px; border: 1px solid var(--green-fg); border-radius: 5px;
+  white-space: nowrap; flex-shrink: 0; font-weight: 500;
+}
+.attention-item-confirm:hover { background: var(--s-paid-bg); }
 
 /* ---------- dashboard ---------- */
 .dash-grid {

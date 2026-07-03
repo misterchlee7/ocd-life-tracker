@@ -20,13 +20,14 @@ const ui = {
   openMenuId: null,
 };
 
-const FILTER_STATUSES = ['active', 'trial', 'paused']; // cancelled has its own section
+const FILTER_STATUSES = ['active', 'trial', 'paused', 'non_renewing']; // cancelled has its own section
 const FREQUENCIES = ['monthly', 'quarterly', 'semi_annual', 'biannual', 'annual', 'biennial'];
 
 // For active subs, derive the next upcoming renewal from the stored anchor date
 // rather than relying on the stored value being kept up to date manually.
 function computedRenewal(sub) {
-  if (!sub.next_renewal || sub.status === 'cancelled') return sub.next_renewal;
+  // non_renewing: next_renewal is a fixed end date — never roll it forward
+  if (!sub.next_renewal || sub.status === 'cancelled' || sub.status === 'non_renewing') return sub.next_renewal;
   const today = todayISO();
   if (sub.next_renewal >= today) return sub.next_renewal;
   const step = { monthly: 1, quarterly: 3, semi_annual: 6, biannual: 6, annual: 12, biennial: 24 }[sub.frequency] || 1;
@@ -123,8 +124,9 @@ function render({ data, loading }) {
   const netMonthly = grossMonthly - subsidizedMonthly;
 
   // upcoming30: non-monthly only — monthly subs always renew, so they'd make this noisy
+  // non_renewing excluded: no charge is coming
   const upcoming30 = active.filter(s => {
-    if (s.frequency === 'monthly') return false;
+    if (s.frequency === 'monthly' || s.status === 'non_renewing') return false;
     const d = daysFromToday(computedRenewal(s));
     return d != null && d >= 0 && d <= 30;
   });
@@ -338,7 +340,9 @@ function subRowHTML(s) {
   const days = renewal ? daysFromToday(renewal) : null;
   const urgency = days != null && days <= 7 ? 'renewal-due' : days != null && days <= 30 ? 'renewal-soon' : '';
   const renewalCell = renewal
-    ? `<span class="${urgency}">${shortDate(renewal)} <span class="cell-amount-sub">${relativeDays(renewal)}</span></span>`
+    ? s.status === 'non_renewing'
+      ? `<span class="${urgency}">Ends ${shortDate(renewal)} <span class="cell-amount-sub">${relativeDays(renewal)}</span></span>`
+      : `<span class="${urgency}">${shortDate(renewal)} <span class="cell-amount-sub">${relativeDays(renewal)}</span></span>`
     : '—';
   return `
     <tr data-id="${s.id}" class="${s.archived ? 'archived' : ''} ${s.status === 'cancelled' ? 'sub-cancelled' : ''}">
@@ -364,10 +368,11 @@ function subRowHTML(s) {
 
 function statusPill(status) {
   const cls = {
-    active:    's-paid',
-    trial:     's-scheduled',
-    paused:    's-skipped',
-    cancelled: 's-needs_confirm',
+    active:       's-paid',
+    trial:        's-scheduled',
+    paused:       's-skipped',
+    non_renewing: 's-needs_confirm',
+    cancelled:    's-needs_confirm',
   }[status] || 's-skipped';
   return `<span class="status ${cls}">${STATUS_LABELS[status] || status}</span>`;
 }
@@ -376,7 +381,8 @@ function rowMenuHTML(s) {
   return `
     <div class="menu" data-id="${s.id}">
       <div class="menu-item" data-act="edit"><div class="title">✏️ Edit</div></div>
-      <div class="menu-item" data-act="advance"><div class="title">↻ Advance renewal one period</div><div class="desc">Push next_renewal forward</div></div>
+      ${s.status !== 'non_renewing' ? `<div class="menu-item" data-act="advance"><div class="title">↻ Advance renewal one period</div><div class="desc">Push next_renewal forward</div></div>` : ''}
+      ${s.status !== 'cancelled' && s.status !== 'non_renewing' ? `<div class="menu-item" data-act="nonrenew"><div class="title">🚫 Won't renew</div><div class="desc">Auto-renew off — keep until ${s.next_renewal ? escapeHTML(shortDate(s.next_renewal)) : 'end date'}</div></div>` : ''}
       ${s.status !== 'cancelled' ? `<div class="menu-item" data-act="cancel"><div class="title">❌ Mark cancelled</div></div>` : ''}
       ${s.status !== 'active' ? `<div class="menu-item" data-act="activate"><div class="title">✅ Mark active</div></div>` : ''}
       <div class="menu-sep"></div>
@@ -659,6 +665,10 @@ function handleMenuAction(id, act) {
         if (s) s.next_renewal = advanceRenewal(s);
       }, `advance ${sub.name}`);
       toast(`Renewal advanced: ${sub.name}`, 'success');
+      break;
+    case 'nonrenew':
+      state.mutate(d => { const s = d.subscriptions.find(x => x.id === id); if (s) s.status = 'non_renewing'; }, `won't renew: ${sub.name}`);
+      toast(`Won't renew: ${sub.name}${sub.next_renewal ? ` — ends ${shortDate(sub.next_renewal)}` : ''}`, 'info');
       break;
     case 'cancel':
       state.mutate(d => { const s = d.subscriptions.find(x => x.id === id); if (s) s.status = 'cancelled'; }, `cancel ${sub.name}`);

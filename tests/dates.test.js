@@ -7,7 +7,7 @@ import {
   periodFor, nextOccurrence, daysBetween, occurrencesPerYear,
 } from '../js/core/dates.js';
 import {
-  yearProgress, statusForRow, cadenceAnchorMonth, rotation,
+  yearProgress, statusForRow, cadenceAnchorMonth, rotation, getAttentionItems,
 } from '../js/core/derive.js';
 
 // ---------- periodFor ----------
@@ -162,4 +162,64 @@ test('cadenceAnchorMonth: derives month from latest payment', () => {
 test('cadenceAnchorMonth: null for monthly or no payments', () => {
   assert.equal(cadenceAnchorMonth({ payments: [] }, { id: 'b1', frequency: 'quarterly' }), null);
   assert.equal(cadenceAnchorMonth({ payments: [] }, { id: 'b1', frequency: 'monthly' }), null);
+});
+
+// ---------- derive: getAttentionItems (non_renewing subscriptions) ----------
+
+function isoDaysFromNow(n) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function emptyData(subscriptions) {
+  return {
+    bills: [], payments: [], subscriptions, vesting: [], grants: [],
+    perks: [], perk_claims: [], backlog: [], warranties: [], settings: {},
+  };
+}
+
+test('attention: non_renewing sub past end date → zone 1 sub_ended with sub_id', () => {
+  const data = emptyData([
+    { id: 's1', name: 'Epidemic Sound', status: 'non_renewing', frequency: 'annual', next_renewal: isoDaysFromNow(-3) },
+  ]);
+  const items = getAttentionItems(data);
+  const ended = items.find(i => i.kind === 'sub_ended');
+  assert.ok(ended);
+  assert.equal(ended.zone, 1);
+  assert.equal(ended.sub_id, 's1');
+});
+
+test('attention: non_renewing sub ending within 30d → zone 2 sub_ending, no sub_renewal', () => {
+  const data = emptyData([
+    { id: 's1', name: 'Epidemic Sound', status: 'non_renewing', frequency: 'annual', next_renewal: isoDaysFromNow(24) },
+  ]);
+  const items = getAttentionItems(data);
+  assert.ok(items.find(i => i.kind === 'sub_ending' && i.zone === 2));
+  assert.equal(items.find(i => i.kind === 'sub_renewal'), undefined);
+  assert.equal(items.find(i => i.kind === 'sub_ended'), undefined);
+});
+
+test('attention: non_renewing sub ending beyond 30d → no attention items', () => {
+  const data = emptyData([
+    { id: 's1', name: 'Epidemic Sound', status: 'non_renewing', frequency: 'annual', next_renewal: isoDaysFromNow(60) },
+  ]);
+  const items = getAttentionItems(data);
+  assert.equal(items.filter(i => i.kind.startsWith('sub_')).length, 0);
+});
+
+test('attention: active non-monthly sub still produces sub_renewal', () => {
+  const data = emptyData([
+    { id: 's1', name: 'Adobe CC', status: 'active', frequency: 'annual', amount: 599, next_renewal: isoDaysFromNow(10) },
+  ]);
+  const items = getAttentionItems(data);
+  assert.ok(items.find(i => i.kind === 'sub_renewal'));
+});
+
+test('attention: cancelled sub past end date produces nothing', () => {
+  const data = emptyData([
+    { id: 's1', name: 'Old Sub', status: 'cancelled', frequency: 'annual', next_renewal: isoDaysFromNow(-3) },
+  ]);
+  const items = getAttentionItems(data);
+  assert.equal(items.filter(i => i.kind.startsWith('sub_')).length, 0);
 });

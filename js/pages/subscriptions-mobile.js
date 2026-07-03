@@ -8,7 +8,8 @@ const page = document.getElementById('page');
 const ui = { filter: 'all' };
 
 function computedRenewal(sub) {
-  if (!sub.next_renewal || sub.frequency !== 'monthly') return sub.next_renewal;
+  // non_renewing: next_renewal is a fixed end date — never roll it forward
+  if (!sub.next_renewal || sub.frequency !== 'monthly' || sub.status === 'non_renewing') return sub.next_renewal;
   const today = todayISO();
   if (sub.next_renewal >= today) return sub.next_renewal;
   const d = new Date(sub.next_renewal + 'T00:00:00');
@@ -47,7 +48,7 @@ function summaryStripHTML(data) {
   const subsidized = active.reduce((a, s) => a + monthlySubsidy(s), 0);
   const netMonthly = grossMonthly - subsidized;
   const upcoming30 = active.filter(s => {
-    if (s.frequency === 'monthly') return false;
+    if (s.frequency === 'monthly' || s.status === 'non_renewing') return false;
     const d = daysFromToday(computedRenewal(s));
     return d != null && d >= 0 && d <= 30;
   });
@@ -74,7 +75,7 @@ function summaryStripHTML(data) {
 
 function filterBarHTML(data) {
   const subs = data.subscriptions.filter(s => !s.archived && s.status !== 'cancelled');
-  const counts = { active: 0, trial: 0, paused: 0 };
+  const counts = { active: 0, trial: 0, paused: 0, non_renewing: 0 };
   subs.forEach(s => { if (s.status in counts) counts[s.status]++; });
 
   const chip = (val, label, count) => {
@@ -89,12 +90,13 @@ function filterBarHTML(data) {
       ${chip('active', 'Active', counts.active)}
       ${chip('trial', 'Trial', counts.trial)}
       ${chip('paused', 'Paused', counts.paused)}
+      ${chip('non_renewing', "Won't renew", counts.non_renewing)}
     </div>
   `;
 }
 
 function statusBadge(status) {
-  const cls = { active: 's-paid', trial: 's-scheduled', paused: 's-skipped', cancelled: 's-needs_confirm' }[status] || 's-skipped';
+  const cls = { active: 's-paid', trial: 's-scheduled', paused: 's-skipped', non_renewing: 's-needs_confirm', cancelled: 's-needs_confirm' }[status] || 's-skipped';
   return `<span class="status ${cls}">${STATUS_LABELS[status] || status}</span>`;
 }
 
@@ -110,7 +112,7 @@ function subCardHTML(sub) {
   const days = renewal ? daysFromToday(renewal) : null;
   const urgCls = renewalUrgencyClass(days);
   const renewalText = renewal
-    ? `<span class="${urgCls}">${shortDate(renewal)}</span> <span style="color:var(--text-muted);font-size:11px">${relativeDays(renewal)}</span>`
+    ? `<span class="${urgCls}">${sub.status === 'non_renewing' ? 'Ends ' : ''}${shortDate(renewal)}</span> <span style="color:var(--text-muted);font-size:11px">${relativeDays(renewal)}</span>`
     : '—';
   const subsidyBadge = sub.billed_to
     ? `<span class="pill type tiny" style="background:#eef6ff;color:#3b6fa8;border-color:#c2d8f0">${sub.subsidized_amount != null ? fmtMoneyShort(sub.subsidized_amount) + ' covered' : 'Subsidized'}</span>`
@@ -208,7 +210,7 @@ function openSubSheet(subId) {
   showBottomSheet({
     title: sub.name,
     items: [
-      {
+      sub.status !== 'non_renewing' ? {
         icon: '↻', label: 'Advance renewal one period',
         description: sub.next_renewal ? `Next: ${shortDate(advanceRenewal(sub))}` : '',
         action: () => {
@@ -218,7 +220,15 @@ function openSubSheet(subId) {
           }, `advance ${sub.name}`);
           toast(`Renewal advanced: ${sub.name}`, 'success');
         },
-      },
+      } : null,
+      sub.status !== 'cancelled' && sub.status !== 'non_renewing' ? {
+        icon: '🚫', label: "Won't renew",
+        description: sub.next_renewal ? `Auto-renew off — keep until ${shortDate(sub.next_renewal)}` : 'Auto-renew off',
+        action: () => {
+          state.mutate(d => { const s = d.subscriptions.find(x => x.id === subId); if (s) s.status = 'non_renewing'; }, `won't renew: ${sub.name}`);
+          toast(`Won't renew: ${sub.name}`, 'info');
+        },
+      } : null,
       sub.status !== 'cancelled' ? {
         icon: '❌', label: 'Mark cancelled',
         action: () => {
@@ -226,7 +236,7 @@ function openSubSheet(subId) {
           toast(`Cancelled: ${sub.name}`, 'info');
         },
       } : null,
-      sub.status === 'cancelled' ? {
+      sub.status === 'cancelled' || sub.status === 'non_renewing' ? {
         icon: '✅', label: 'Mark active',
         action: () => {
           state.mutate(d => { const s = d.subscriptions.find(x => x.id === subId); if (s) s.status = 'active'; }, `activate ${sub.name}`);
