@@ -33,6 +33,7 @@ Only 2 users (Chang + Kiju). Desktop-first for data entry; mobile has a dedicate
 ├── vesting.html            # tab: RSU/ESPP schedule
 ├── backlog.html            # tab: personal todos
 ├── warranties.html         # tab: product warranty tracker
+├── accounts.html           # tab: financial accounts registry (bank/brokerage/retirement)
 ├── history.html            # meta: read-only activity log (accessible via ⏱ in topbar, not a nav tab)
 │
 ├── css/
@@ -65,6 +66,8 @@ Only 2 users (Chang + Kiju). Desktop-first for data entry; mobile has a dedicate
 │       ├── backlog-mobile.js     # mobile backlog: checkbox list, start/snooze/drop via bottom sheet
 │       ├── warranties.js         # desktop; dynamically imports warranties-mobile.js on mobile
 │       ├── warranties-mobile.js  # mobile warranties: urgency-bordered cards, read-mostly
+│       ├── accounts.js           # desktop; dynamically imports accounts-mobile.js on mobile
+│       ├── accounts-mobile.js    # mobile accounts: read-only card list + summary strip
 │       └── history.js            # read-only activity log: entries grouped by date, newest first
 │
 ├── docs/
@@ -130,6 +133,7 @@ user clicks "Login to save" (guest mode)
 - **Subscriptions.** `billed_to` = which card covers cost. `subsidized_amount` = partial subsidy (null = full amount covered). Cancelled rows faded + struck through. Next Renewal: ≤7d = red, ≤30d = amber. No today divider.
 - **Non-renewing subscriptions.** Status `non_renewing` = auto-renew turned off at the vendor but access continues until `next_renewal` (reinterpreted as the END date — `computedRenewal()` never rolls it forward for this status). Row stays in the main table with an amber "Non-renewing" pill and "Ends [date]" in the renewal column. Excluded from the "Non-monthly ≤ 30d" upcoming-charge summary and from `sub_renewal` attention items. Instead: `sub_ending` (zone 2, ends ≤30d) and, once the end date passes, `sub_ended` (zone 1) with a "✓ Confirm cancelled" button on the dashboard that sets status → `cancelled` — no silent auto-transition, matching the manual-confirmation ethos. "Advance renewal" is hidden for non-renewing rows.
 - **Warranties.** `data.warranties || []` — always access defensively. Urgency tiers: ≤7d = red, ≤30d = amber-outline, ≤90d = amber, expired = faded. No today divider.
+- **Accounts.** `data.accounts || []` — always access defensively. Read-mostly registry of financial accounts (institution + name, `account_type`, who, last4, APY, opened date). **No live balance tracking** — balances are optional manual snapshots (`snapshots: [{date, balance}]`, ascending, one per date; same-day re-snapshot replaces) added via "Add balance snapshot" (amountModal) in the row menu. UI shows latest snapshot + age. Status `open`/`closed` (not `archived`) — closed rows faded via `.archived` class, kept for reference, toggled via row menu. Summary cards: Open count (who breakdown), Snapshot total (+ coverage & oldest-snapshot age), Best APY, Closed count. Mobile is read-only cards (no actions).
 - **Paid · Month label.** `statusPill()` in bills.js shows `Paid · [month]` only when `paid_date` is **2+ months** away from the viewed month. A bill logged a few days late (e.g. April paid on May 6) just shows "Paid".
 - **Bills table columns.** Day | Bill | Who | Amount | This month | Payment | Rewards | Last used | Notes | Actions (10 columns). Type column was removed — the type pill (`<span class="pill type tiny bill-type-inline">`) is rendered inline inside the Bill name cell alongside APR/due badges. The Payment column is contextual: shows `paid_amount` in green (`td.paid-amt`, color `--s-paid-fg`) when status=paid, `pending_amount` otherwise. Sort key stays `'pending'` for backward compat.
 - **Compact table columns.** `td.tight { width: 1%; white-space: nowrap }` applied to Day, Who, This month, Payment, Rewards, Last used, Notes, and Actions cells. This collapses those columns to their content width and lets Bill + Amount absorb the remaining table width, eliminating dead space.
@@ -194,6 +198,7 @@ Loaded on all pages via `<link>`. Sections:
 | Backlog | Checkbox to toggle done; bottom sheet for start/snooze/drop/reopen |
 | Vesting | Mark vested (primary btn); mark sold (custom inline modal); bottom sheet |
 | Warranties | Read-only card list sorted by expiry; urgency-bordered; no actions needed |
+| Accounts | Read-only card list (open then closed); summary strip; no actions needed |
 | Dashboard | Desktop-only (no mobile module — reads fine on mobile as-is) |
 
 ### Key mobile conventions
@@ -290,4 +295,4 @@ Every `state.mutate()` call appends `{ ts, label }` to `data.history` (rolling c
 
 ## Status
 
-All 7 tabs (Dashboard, Bills, Perks, Subscriptions, Vesting, Backlog, Warranties) plus the History log page are fully functional on desktop. Bills, Perks, Subscriptions, Vesting, Backlog, and Warranties have dedicated mobile modules (card-based UI with bottom sheet actions). Dashboard and History render fine on mobile with the shared topbar/nav. Demo/guest mode is live on all pages and viewports. Dark mode + installable PWA shell are live. Deployed at https://misterchlee7.github.io/ocd-life-tracker/.
+All 8 tabs (Dashboard, Bills, Perks, Subscriptions, Vesting, Backlog, Warranties, Accounts) plus the History log page are fully functional on desktop. Bills, Perks, Subscriptions, Vesting, Backlog, Warranties, and Accounts have dedicated mobile modules (card-based UI with bottom sheet actions). Dashboard and History render fine on mobile with the shared topbar/nav. Demo/guest mode is live on all pages and viewports. Dark mode + installable PWA shell are live. Deployed at https://misterchlee7.github.io/ocd-life-tracker/.

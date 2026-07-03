@@ -26,6 +26,7 @@ Canonical shape of `data.json` stored in the `ocd-life-tracker-data` repo. This 
   "stock_prices":  { /* ticker → price, e.g. "CSCO": 115.46 */ },
   "backlog":       [ /* BacklogItem */ ],
   "warranties":    [ /* Warranty */ ],  // optional; accessed as data.warranties || []
+  "accounts":      [ /* Account */ ],   // optional; accessed as data.accounts || []
   "history":       [ /* HistoryEntry — activity log */ ]
 }
 ```
@@ -41,6 +42,8 @@ perk_status (per-period): "available" | "claimed" | "skipped" | "expired"
 sub_status: "active" | "trial" | "paused" | "non_renewing" | "cancelled"
 sub_category: "streaming" | "music" | "software" | "fitness" | "news" | "storage" | "gaming" | "shopping" | "cc_annual_fee" | "other"
 warranty_category: "electronics" | "appliance" | "vehicle" | "furniture" | "tool" | "outdoor" | "clothing" | "other"
+account_type:   "checking" | "savings" | "brokerage" | "retirement" | "hsa" | "cd" | "other"
+account_status: "open" | "closed"
 grant_type: "rsu" | "espp"
 vest_status: "upcoming" | "vested" | "sold" | "pending_settlement"
 todo_status:      "open" | "in_progress" | "done" | "snoozed" | "dropped"
@@ -279,6 +282,30 @@ Urgency tiers (based on days until `expiry_date`):
 - **≤ 30 days**: amber row background + red-outline badge ("Xd left")
 - **≤ 90 days**: amber-outline badge ("Xd left")
 - **Expired** (past date): faded row (opacity 0.55) + dark red "Expired" badge
+
+## `Account`
+
+Registry of financial accounts (bank, brokerage, retirement, …). Read-mostly: "what accounts exist, who owns them, why". The `accounts` array is optional at the top level — always access as `data.accounts || []` and guard writes with `if (!d.accounts) d.accounts = []`.
+
+**No live balance tracking.** Balances are optional manual snapshots (`snapshots[]`), appended via the "Add balance snapshot" row action. The latest snapshot (by date) is what the UI shows, alongside its age. One snapshot per date — re-snapshotting the same day replaces that entry.
+
+```jsonc
+{
+  "id": "a9k2m4x1",
+  "institution": "PNC",              // required; bank/broker name
+  "name": "Joint Checking",          // required; account label
+  "type": "checking",                // account_type enum
+  "who": "joint",                    // who enum
+  "last4": "4821",                   // optional; last 4 digits, display only
+  "apy": 4.35,                       // optional; interest rate %, updated manually
+  "opened_date": "2019-03-12",       // optional; ISO date
+  "status": "open",                  // account_status enum; closed rows faded + struck through
+  "snapshots": [                     // optional; manual balance snapshots, ascending by date
+    { "date": "2026-06-30", "balance": 18250.44 }
+  ],
+  "notes": "Direct deposit lands here"
+}
+```
 
 ## `HistoryEntry`
 

@@ -92,3 +92,13 @@ export const WARRANTY_CAT_LABELS = {
   furniture: 'Furniture', tool: 'Tool', outdoor: 'Outdoor',
   clothing: 'Clothing', other: 'Other',
 };
+
+// ---------- accounts ----------
+
+export const ACCOUNT_TYPES = ['checking', 'savings', 'brokerage', 'retirement', 'hsa', 'cd', 'other'];
+export const ACCOUNT_TYPE_LABELS = {
+  checking: 'Checking', savings: 'Savings', brokerage: 'Brokerage',
+  retirement: 'Retirement', hsa: 'HSA', cd: 'CD', other: 'Other',
+};
+export const ACCOUNT_STATUSES = ['open', 'closed'];
+export const ACCOUNT_STATUS_LABELS = { open: 'Open', closed: 'Closed' };

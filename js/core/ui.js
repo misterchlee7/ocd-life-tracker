@@ -763,6 +763,7 @@ function initMobileNav() {
     { href: 'vesting.html',    label: 'Vesting'    },
     { href: 'backlog.html',    label: 'Backlog'    },
     { href: 'warranties.html', label: 'Warranties' },
+    { href: 'accounts.html',   label: 'Accounts'   },
   ];
   const isMoreActive = morePages.some(p => path === p.href);
 
