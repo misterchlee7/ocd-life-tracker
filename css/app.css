@@ -325,6 +325,10 @@ th.sorted .sort-icon { color: var(--accent); }
 .breakdown-name { color: var(--text); }
 .breakdown-amount { font-weight: 600; color: var(--text); white-space: nowrap; margin-left: 12px; }
 .breakdown-empty { padding: 16px 12px; font-size: 13px; color: var(--text-muted); text-align: center; }
+.breakdown-group-hdr { background: var(--th-bg); font-weight: 650; }
+.breakdown-group-hdr .breakdown-name { text-transform: capitalize; }
+.breakdown-subrow { padding-left: 22px; }
+.breakdown-subrow .breakdown-name, .breakdown-subrow .breakdown-amount { color: var(--text-muted); font-weight: 400; font-size: 13px; }
 .breakdown-total {
   display: flex; justify-content: space-between; align-items: center;
   padding: 9px 12px; font-size: 13.5px; font-weight: 650;
@@ -582,6 +586,7 @@ th.sorted .sort-icon { color: var(--accent); }
 .rewards-line { display: flex; align-items: baseline; gap: 6px; }
 .rewards-line-val { font-size: 14px; font-weight: 600; color: var(--text); }
 .rewards-line-sub { font-size: 11px; color: var(--text-faint); }
+.rewards-more { font-size: 11.5px; color: var(--text-faint); font-style: italic; }
 .notes-cell { color: var(--text-muted); font-size: 12px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 tr.archived { opacity: 0.5; }
 tr.sub-cancelled { opacity: 0.45; }

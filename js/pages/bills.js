@@ -125,19 +125,40 @@ function collectRewardUnits(data) {
   return [...units].sort();
 }
 
-// Summary card value block for CC rewards — shows each reward unit as equal lines.
+const REWARDS_CARD_MAX_LINES = 3;
+
+function fmtRewardAmount(unit, total) {
+  return unit === 'dollars' ? fmtMoney(total) : `${Number(total).toLocaleString()} ${unit}`;
+}
+
+// Sort reward units by descending value, dollars first (most actionable).
+function sortedRewardEntries(rewardsByUnit) {
+  return Object.entries(rewardsByUnit)
+    .filter(([, v]) => v.total > 0)
+    .sort((a, b) => {
+      if (a[0] === 'dollars') return -1;
+      if (b[0] === 'dollars') return 1;
+      return b[1].total - a[1].total;
+    });
+}
+
+// Summary card value block for CC rewards — shows top reward units by value,
+// collapsing the rest into a "+N more" line so the card height stays fixed
+// regardless of how many reward types exist.
 function rewardsCardValueHTML(rewardsByUnit) {
-  const entries = Object.entries(rewardsByUnit).filter(([, v]) => v.total > 0);
+  const entries = sortedRewardEntries(rewardsByUnit);
   if (entries.length === 0) {
     return `<div class="value">—</div><div class="sub">&nbsp;</div>`;
   }
-  const lines = entries.map(([unit, { total, count }]) => {
+  const shown = entries.slice(0, REWARDS_CARD_MAX_LINES);
+  const extra = entries.length - shown.length;
+  const lines = shown.map(([unit, { total, count }]) => {
     const cardLabel = `${count} ${count === 1 ? 'card' : 'cards'}`;
-    const formatted = unit === 'dollars'
-      ? fmtMoney(total)
-      : `${Number(total).toLocaleString()} ${unit}`;
-    return `<div class="rewards-line"><span class="rewards-line-val">${formatted}</span><span class="rewards-line-sub">${cardLabel}</span></div>`;
+    return `<div class="rewards-line"><span class="rewards-line-val">${fmtRewardAmount(unit, total)}</span><span class="rewards-line-sub">${cardLabel}</span></div>`;
   });
+  if (extra > 0) {
+    lines.push(`<div class="rewards-line rewards-more">+${extra} more type${extra === 1 ? '' : 's'}</div>`);
+  }
   return `<div class="rewards-stack">${lines.join('')}</div>`;
 }
 
@@ -226,7 +247,7 @@ function summaryHTML(data) {
         <div class="value ${needsConfirmCount ? 'warn' : ''}">${needsConfirmCount} ${needsConfirmCount === 1 ? 'bill' : 'bills'}</div>
         <div class="sub">${needsConfirmCount ? `${fmtMoney(needsConfirmAmt)} past day — verify posted` : 'all caught up'}</div>
       </div>
-      <div class="card">
+      <div class="card clickable-card" data-breakdown="rewards">
         <div class="label">CC rewards available</div>
         ${rewardsCardValueHTML(rewardsByUnit)}
       </div>
@@ -931,6 +952,12 @@ function showBreakdownModal(data, type) {
   if (existing) existing.remove();
 
   const filtered = data.bills.filter(b => !b.archived);
+
+  if (type === 'rewards') {
+    showRewardsBreakdownModal(filtered);
+    return;
+  }
+
   let items = [];
 
   if (type === 'pending') {
@@ -975,6 +1002,57 @@ function showBreakdownModal(data, type) {
         <span>Total</span>
         <span>${fmtMoney(total)}</span>
       </div>
+      <div class="modal-actions" style="justify-content:flex-end">
+        <button class="btn primary" id="breakdown-close">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+  backdrop.querySelector('#breakdown-close').addEventListener('click', () => backdrop.remove());
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) backdrop.remove(); });
+  closeOnEscape(backdrop);
+}
+
+// CC rewards breakdown — grouped by unit (dollars, Chase UR, Amex MR, etc.),
+// since totals across different reward units can't be summed into one number.
+function showRewardsBreakdownModal(filtered) {
+  const existing = document.getElementById('breakdown-modal-backdrop');
+  if (existing) existing.remove();
+
+  const rewardsByUnit = {};
+  for (const b of filtered) {
+    const rb = b?.cc?.rewards_balance || 0;
+    if (rb <= 0) continue;
+    const unit = b.cc?.rewards_unit || 'dollars';
+    if (!rewardsByUnit[unit]) rewardsByUnit[unit] = { total: 0, cards: [] };
+    rewardsByUnit[unit].total += rb;
+    rewardsByUnit[unit].cards.push({ name: `${b.brand ? b.brand + ' ' : ''}${b.name}`, balance: rb });
+  }
+
+  const entries = sortedRewardEntries(rewardsByUnit);
+  const rows = entries.length
+    ? entries.map(([unit, { total, cards }]) => `
+        <div class="breakdown-group">
+          <div class="breakdown-row breakdown-group-hdr">
+            <span class="breakdown-name">${unit === 'dollars' ? 'Cashback / dollars' : unit}</span>
+            <span class="breakdown-amount">${fmtRewardAmount(unit, total)}</span>
+          </div>
+          ${cards.sort((a, b) => b.balance - a.balance).map(c => `
+            <div class="breakdown-row breakdown-subrow">
+              <span class="breakdown-name">${c.name}</span>
+              <span class="breakdown-amount">${fmtRewardAmount(unit, c.balance)}</span>
+            </div>`).join('')}
+        </div>`).join('')
+    : `<div class="breakdown-empty">No rewards to show.</div>`;
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'breakdown-modal-backdrop';
+  backdrop.className = 'modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="modal" style="width:min(420px,92vw)">
+      <h2>CC rewards available</h2>
+      <p class="modal-sub">${entries.length} reward type${entries.length === 1 ? '' : 's'}</p>
+      <div class="breakdown-list">${rows}</div>
       <div class="modal-actions" style="justify-content:flex-end">
         <button class="btn primary" id="breakdown-close">Close</button>
       </div>
