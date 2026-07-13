@@ -16,8 +16,12 @@ function latestSnapshot(a) {
 // ---------- HTML builders ----------
 
 function summaryStripHTML(open) {
-  const snapped = open.map(a => latestSnapshot(a)).filter(Boolean);
-  const total = snapped.reduce((s, x) => s + x.balance, 0);
+  const snapped = open.map(a => ({ a, snap: latestSnapshot(a) })).filter(x => x.snap);
+  const total = snapped.reduce((s, x) => s + x.snap.balance, 0);
+  const retirementTotal = snapped
+    .filter(x => x.a.type === 'retirement' || x.a.type === 'hsa')
+    .reduce((s, x) => s + x.snap.balance, 0);
+  const nonRetirementTotal = total - retirementTotal;
   const best = open.filter(a => a.apy != null).sort((a, b) => b.apy - a.apy)[0];
 
   return `
@@ -30,6 +34,7 @@ function summaryStripHTML(open) {
         <div class="label">Snapshot total</div>
         <div class="value" style="font-size:13px">${snapped.length ? fmtMoneyShort(total) : '—'}</div>
         <div class="sub">${snapped.length ? `${snapped.length}/${open.length} accounts` : 'none yet'}</div>
+        ${snapped.length ? `<div class="sub">Ret ${fmtMoneyShort(retirementTotal)} · Non-ret ${fmtMoneyShort(nonRetirementTotal)}</div>` : ''}
       </div>
       <div class="m-summary-card">
         <div class="label">Best APY</div>

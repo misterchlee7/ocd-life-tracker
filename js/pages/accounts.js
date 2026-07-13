@@ -111,6 +111,14 @@ function summaryHTML({ open, closed }) {
     ? `${snapped.length}/${open.length} accounts · oldest ${relativeDays(oldest)}`
     : 'no balance snapshots yet';
 
+  const retirementTotal = snapped
+    .filter(x => x.a.type === 'retirement' || x.a.type === 'hsa')
+    .reduce((s, x) => s + x.snap.balance, 0);
+  const nonRetirementTotal = total - retirementTotal;
+  const breakdownSub = snapped.length
+    ? `Retirement ${fmtMoney(retirementTotal)} · Non-retirement ${fmtMoney(nonRetirementTotal)}`
+    : '';
+
   const best = open.filter(a => a.apy != null).sort((a, b) => b.apy - a.apy)[0];
   const bestLabel = best ? `${best.apy}%` : '—';
   const bestSub = best ? escapeHTML(accountLabel(best)) : 'no APY recorded';
@@ -126,6 +134,7 @@ function summaryHTML({ open, closed }) {
         <div class="label">Snapshot total</div>
         <div class="value" style="font-size:1.1rem">${totalLabel}</div>
         <div class="sub">${totalSub}</div>
+        ${breakdownSub ? `<div class="sub">${breakdownSub}</div>` : ''}
       </div>
       <div class="card">
         <div class="label">Best APY</div>
