@@ -1,6 +1,7 @@
 import { state, uid } from '../core/state.js';
-import { bootstrap, isMobile, whoPill, toast, positionMenu, confirmModal, amountModal, closeOnEscape, pageHeaderHTML, fmtMoney } from '../core/ui.js';
+import { bootstrap, isMobile, whoPill, toast, positionMenu, confirmModal, amountModal, closeOnEscape, pageHeaderHTML, fmtMoney, fmtMoneyShort } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays } from '../core/dates.js';
+import { balanceSeries, seriesDelta } from '../core/derive.js';
 import {
   escapeHTML, escapeAttr, truncate,
   ACCOUNT_TYPES as TYPES, ACCOUNT_TYPE_LABELS as TYPE_LABELS,
@@ -16,6 +17,7 @@ const ui = {
   showClosed: false,
   sort: { key: 'institution', dir: 'asc' },
   openMenuId: null,
+  chart: { scope: 'invest', accountId: null, range: '1y' },
 };
 
 // ---------- helpers ----------
@@ -86,8 +88,10 @@ function render({ data, loading }) {
 
   page.innerHTML = `
     ${pageHeaderHTML('Accounts', `${open.length} open`,
-      `<button class="btn primary" id="btn-add">+ Add account</button>`)}
+      `<button class="btn" id="btn-bulk-snap">Update balances</button>
+       <button class="btn primary" id="btn-add">+ Add account</button>`)}
     ${summaryHTML({ open, closed })}
+    ${chartPanelHTML(data)}
     ${filtersHTML()}
     ${filtered.length === 0
       ? `<div class="empty"><h3>No accounts</h3><p>Click + Add account to track your first one.</p></div>`
@@ -148,6 +152,265 @@ function summaryHTML({ open, closed }) {
       </div>
     </div>
   `;
+}
+
+// ---------- balance trend chart ----------
+//
+// One line for the selected scope (all investment / one type / one account),
+// forward-filled between snapshots (dots = real snapshots). Growth here includes
+// contributions — balance over time, not investment return (docs/decisions.md).
+
+const INVEST_TYPES = ['brokerage', 'retirement', 'hsa'];
+const CHART_SCOPES = [['invest', 'All investment'], ['brokerage', 'Brokerage'], ['retirement', 'Retirement'], ['hsa', 'HSA']];
+const CHART_RANGES = [['3m', '3M'], ['6m', '6M'], ['ytd', 'YTD'], ['1y', '1Y'], ['all', 'All']];
+const CHART_W = 860, CHART_H = 230;
+const CHART_M = { l: 8, r: 8, t: 16, b: 22 };
+
+// Set by chartPanelHTML for the current render; read by the hover wiring.
+let chartGeom = null;
+
+// Open investment accounts — drives chips, the single-account select, and
+// whether the panel renders at all.
+function investAccounts(data) {
+  return accounts(data).filter(a => a.status !== 'closed' && INVEST_TYPES.includes(a.type));
+}
+
+// Series pool includes CLOSED accounts: their snapshot history is real — dropping
+// it would retroactively rewrite past aggregate totals. Marking an account closed
+// writes a $0 snapshot (see handleMenuAction), so a closed line falls to zero
+// instead of carrying its last balance forward.
+function chartScopeAccounts(data) {
+  if (ui.chart.accountId) return accounts(data).filter(a => a.id === ui.chart.accountId);
+  const pool = accounts(data).filter(a => INVEST_TYPES.includes(a.type));
+  if (ui.chart.scope === 'invest') return pool;
+  return pool.filter(a => a.type === ui.chart.scope);
+}
+
+function chartRangeStart(range, scoped) {
+  const t = todayISO();
+  if (range === 'ytd') return `${t.slice(0, 4)}-01-01`;
+  if (range === 'all') {
+    const first = scoped.flatMap(a => (a.snapshots || []).map(s => s.date)).sort()[0];
+    return first || t;
+  }
+  const d = new Date(t + 'T00:00:00');
+  if (range === '3m') d.setMonth(d.getMonth() - 3);
+  else if (range === '6m') d.setMonth(d.getMonth() - 6);
+  else d.setFullYear(d.getFullYear() - 1); // 1y
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const dayNum = (iso) => Date.parse(iso + 'T00:00:00') / 86400000;
+
+function chartSVG(points) {
+  const t0 = dayNum(points[0].date);
+  const span = Math.max(dayNum(points[points.length - 1].date) - t0, 1);
+  const xFor = (iso) => CHART_M.l + ((dayNum(iso) - t0) / span) * (CHART_W - CHART_M.l - CHART_M.r);
+
+  let lo = Math.min(...points.map(p => p.value));
+  let hi = Math.max(...points.map(p => p.value));
+  if (lo === hi) { lo -= 1; hi += 1; }
+  const pad = (hi - lo) * 0.08;
+  lo -= pad; hi += pad;
+  const yFor = (v) => CHART_H - CHART_M.b - ((v - lo) / (hi - lo)) * (CHART_H - CHART_M.t - CHART_M.b);
+
+  chartGeom = { points, xFor, yFor };
+
+  // Recessive grid: 4 evenly spaced horizontal lines, labels above-left.
+  const grid = [0, 1, 2, 3].map(i => {
+    const v = lo + ((hi - lo) * i) / 3;
+    const y = yFor(v);
+    return `<line x1="${CHART_M.l}" y1="${y}" x2="${CHART_W - CHART_M.r}" y2="${y}" class="cg-grid"/>
+      <text x="${CHART_M.l}" y="${y - 4}" class="cg-lbl">${fmtMoneyShort(v)}</text>`;
+  }).join('');
+
+  // X ticks: 4 dates interpolated across the window.
+  const xticks = [0, 1 / 3, 2 / 3, 1].map(f => {
+    const ms = (t0 + f * span) * 86400000;
+    const d = new Date(ms);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const anchor = f === 0 ? 'start' : f === 1 ? 'end' : 'middle';
+    return `<text x="${CHART_M.l + f * (CHART_W - CHART_M.l - CHART_M.r)}" y="${CHART_H - 6}" text-anchor="${anchor}" class="cg-lbl">${shortDate(iso)}</text>`;
+  }).join('');
+
+  const coords = points.map(p => `${xFor(p.date).toFixed(1)},${yFor(p.value).toFixed(1)}`);
+  const linePath = 'M' + coords.join(' L');
+  const baseline = CHART_H - CHART_M.b;
+  const areaPath = `${linePath} L${xFor(points[points.length - 1].date).toFixed(1)},${baseline} L${xFor(points[0].date).toFixed(1)},${baseline} Z`;
+
+  const dots = points.filter(p => p.real).map(p =>
+    `<circle cx="${xFor(p.date).toFixed(1)}" cy="${yFor(p.value).toFixed(1)}" r="3" class="cg-dot"/>`).join('');
+
+  return `
+    <div class="chart-svg-wrap">
+      <svg class="chart-svg" viewBox="0 0 ${CHART_W} ${CHART_H}" role="img" aria-label="Balance over time">
+        ${grid}${xticks}
+        <path d="${areaPath}" class="cg-area"/>
+        <path d="${linePath}" class="cg-line"/>
+        ${dots}
+        <line class="cg-xhair" y1="${CHART_M.t}" y2="${baseline}" style="display:none"/>
+        <circle class="cg-xhair-dot" r="4" style="display:none"/>
+      </svg>
+      <div class="chart-tooltip" style="display:none"></div>
+    </div>
+  `;
+}
+
+function chartPanelHTML(data) {
+  const pool = investAccounts(data);
+  if (!pool.length) { chartGeom = null; return ''; }
+  if (ui.chart.accountId && !pool.some(a => a.id === ui.chart.accountId)) ui.chart.accountId = null;
+
+  const scoped = chartScopeAccounts(data);
+  const end = todayISO();
+  const start = chartRangeStart(ui.chart.range, scoped);
+  const points = balanceSeries(scoped, start, end);
+  const delta = seriesDelta(points);
+  chartGeom = null;
+
+  const count = (t) => pool.filter(a => a.type === t).length;
+  const scopeChips = CHART_SCOPES
+    .filter(([val]) => val === 'invest' || count(val) > 0)
+    .map(([val, label]) =>
+      `<div class="chip ${!ui.chart.accountId && ui.chart.scope === val ? 'active' : ''}" data-cscope="${val}">${label}</div>`)
+    .join('');
+  const acctOptions = pool.map(a =>
+    `<option value="${a.id}" ${ui.chart.accountId === a.id ? 'selected' : ''}>${escapeHTML(accountLabel(a))}</option>`).join('');
+  const rangeChips = CHART_RANGES.map(([val, label]) =>
+    `<div class="chip ${ui.chart.range === val ? 'active' : ''}" data-crange="${val}">${label}</div>`).join('');
+
+  let readout = '';
+  let body;
+  if (points.length < 2) {
+    body = `<div class="chart-empty">Not enough snapshots yet — add balance snapshots (row menu, or “Update balances” above) to see the trend.</div>`;
+  } else {
+    const cls = delta.delta > 0 ? 'pos' : delta.delta < 0 ? 'neg' : '';
+    const sign = delta.delta > 0 ? '+' : delta.delta < 0 ? '−' : '';
+    const pct = delta.pct != null ? ` (${sign}${Math.abs(delta.pct).toFixed(1)}%)` : '';
+    readout = `
+      <div class="chart-readout">
+        <span class="chart-now">${fmtMoney(delta.end)}</span>
+        <span class="chart-delta ${cls}">${sign}${fmtMoney(Math.abs(delta.delta))}${pct}</span>
+        <span class="chart-range-note">since ${shortDate(points[0].date)}</span>
+      </div>`;
+    body = chartSVG(points);
+  }
+
+  return `
+    <div class="chart-panel">
+      <div class="chart-head">
+        <span class="chart-title">Balance trend</span>
+        <span class="chart-note">includes contributions — growth, not investment return</span>
+      </div>
+      <div class="chart-controls">
+        <div class="chips">${scopeChips}</div>
+        <select class="select" id="chart-acct">
+          <option value="">Single account…</option>
+          ${acctOptions}
+        </select>
+        <span class="chart-spacer"></span>
+        <div class="chips">${rangeChips}</div>
+      </div>
+      ${readout}
+      ${body}
+      ${breakdownHTML(scoped, start, end)}
+    </div>
+  `;
+}
+
+function breakdownHTML(scoped, start, end) {
+  if (scoped.length < 2) return '';
+  const rows = scoped.map(a => {
+    const pts = balanceSeries([a], start, end);
+    const d = seriesDelta(pts);
+    return { a, pts, d };
+  }).sort((x, y) => (y.d?.end ?? latestSnapshot(y.a)?.balance ?? 0) - (x.d?.end ?? latestSnapshot(x.a)?.balance ?? 0));
+
+  const cells = rows.map(({ a, pts, d }) => {
+    if (!d) {
+      const snap = latestSnapshot(a);
+      return `<tr class="archived">
+        <td><b>${escapeHTML(accountLabel(a))}</b></td>
+        <td>${TYPE_LABELS[a.type] || a.type}</td>
+        <td class="tight">${snap ? fmtMoney(snap.balance) : '—'}</td>
+        <td class="tight">—</td><td class="tight">—</td>
+        <td class="muted">${pts.length === 1 ? 'one snapshot in range' : 'no snapshots'}</td>
+      </tr>`;
+    }
+    const cls = d.delta > 0 ? 'pos' : d.delta < 0 ? 'neg' : '';
+    const sign = d.delta > 0 ? '+' : d.delta < 0 ? '−' : '';
+    const closed = a.status === 'closed';
+    return `<tr class="${closed ? 'archived' : ''}">
+      <td><b>${escapeHTML(accountLabel(a))}</b>${closed ? ` <span class="pill tiny">${STATUS_LABELS.closed}</span>` : ''}</td>
+      <td>${TYPE_LABELS[a.type] || a.type}</td>
+      <td class="tight">${fmtMoney(d.end)}</td>
+      <td class="tight chart-cell ${cls}">${sign}${fmtMoney(Math.abs(d.delta))}</td>
+      <td class="tight chart-cell ${cls}">${d.pct != null ? sign + Math.abs(d.pct).toFixed(1) + '%' : '—'}</td>
+      <td class="muted">from ${fmtMoney(d.start)} · ${shortDate(pts[0].date)}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="table-wrap chart-breakdown">
+      <table>
+        <thead><tr><th>Account</th><th>Type</th><th>Now</th><th>Δ</th><th>Δ%</th><th>Basis</th></tr></thead>
+        <tbody>${cells}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function wireChart(data) {
+  page.querySelectorAll('[data-cscope]').forEach(ch => ch.addEventListener('click', () => {
+    ui.chart.scope = ch.dataset.cscope;
+    ui.chart.accountId = null;
+    render(state.get());
+  }));
+  page.querySelectorAll('[data-crange]').forEach(ch => ch.addEventListener('click', () => {
+    ui.chart.range = ch.dataset.crange;
+    render(state.get());
+  }));
+  document.getElementById('chart-acct')?.addEventListener('change', (e) => {
+    ui.chart.accountId = e.target.value || null;
+    render(state.get());
+  });
+  wireChartHover();
+}
+
+function wireChartHover() {
+  if (!chartGeom) return;
+  const wrap = page.querySelector('.chart-svg-wrap');
+  const svg = wrap?.querySelector('svg');
+  if (!svg) return;
+  const tip = wrap.querySelector('.chart-tooltip');
+  const xhair = svg.querySelector('.cg-xhair');
+  const hdot = svg.querySelector('.cg-xhair-dot');
+  const { points, xFor, yFor } = chartGeom;
+
+  svg.addEventListener('mousemove', (e) => {
+    const rect = svg.getBoundingClientRect();
+    const sx = ((e.clientX - rect.left) / rect.width) * CHART_W;
+    let best = null, bd = Infinity;
+    for (const p of points) {
+      const d = Math.abs(xFor(p.date) - sx);
+      if (d < bd) { bd = d; best = p; }
+    }
+    if (!best) return;
+    const x = xFor(best.date), y = yFor(best.value);
+    xhair.setAttribute('x1', x); xhair.setAttribute('x2', x); xhair.style.display = '';
+    hdot.setAttribute('cx', x); hdot.setAttribute('cy', y); hdot.style.display = '';
+    tip.innerHTML = `<b>${fmtMoney(best.value)}</b> · ${shortDate(best.date)}${best.real ? '' : ' <span class="muted">· carried</span>'}`;
+    tip.style.display = '';
+    const px = (x / CHART_W) * rect.width;
+    const py = (y / CHART_H) * rect.height;
+    tip.style.left = `${Math.min(Math.max(px, 60), rect.width - 60)}px`;
+    tip.style.top = `${py}px`;
+  });
+  svg.addEventListener('mouseleave', () => {
+    xhair.style.display = 'none';
+    hdot.style.display = 'none';
+    tip.style.display = 'none';
+  });
 }
 
 function filtersHTML() {
@@ -261,6 +524,8 @@ function wireInteractions(data) {
     ui.showClosed = e.target.checked; render(state.get());
   });
   document.getElementById('btn-add')?.addEventListener('click', () => openForm());
+  document.getElementById('btn-bulk-snap')?.addEventListener('click', openBulkSnapshotModal);
+  wireChart(data);
 
   page.querySelectorAll('th.sortable').forEach(th => {
     th.addEventListener('click', () => {
@@ -434,11 +699,17 @@ function handleMenuAction(id, act) {
     case 'snapshot': openSnapshotModal(a); break;
     case 'toggle-status': {
       const next = a.status === 'closed' ? 'open' : 'closed';
+      // Closing zeroes the balance trail so the trend chart (which keeps closed
+      // accounts' history) doesn't carry a stale balance forward.
+      const snap = latestSnapshot(a);
+      const zeroSnap = next === 'closed' && snap && snap.balance !== 0;
       state.mutate(d => {
         const item = (d.accounts || []).find(x => x.id === id);
-        if (item) item.status = next;
+        if (!item) return;
+        item.status = next;
+        if (zeroSnap) applySnapshot(item, todayISO(), 0);
       }, `set status: ${accountLabel(a)} → ${next}`);
-      toast(`${next === 'closed' ? 'Closed' : 'Reopened'}: ${accountLabel(a)}`, 'info');
+      toast(`${next === 'closed' ? 'Closed' : 'Reopened'}: ${accountLabel(a)}${zeroSnap ? ' · $0 snapshot added' : ''}`, 'info');
       render(state.get());
       break;
     }
@@ -447,6 +718,15 @@ function handleMenuAction(id, act) {
 }
 
 // One snapshot per date: re-snapshotting today replaces today's entry.
+// Mutation body shared by the single and bulk snapshot flows.
+function applySnapshot(item, dateISO, amt) {
+  if (!item.snapshots) item.snapshots = [];
+  const existing = item.snapshots.find(s => s.date === dateISO);
+  if (existing) existing.balance = amt;
+  else item.snapshots.push({ date: dateISO, balance: amt });
+  item.snapshots.sort((x, y) => x.date.localeCompare(y.date));
+}
+
 function openSnapshotModal(a) {
   const snap = latestSnapshot(a);
   amountModal({
@@ -458,16 +738,89 @@ function openSnapshotModal(a) {
       const today = todayISO();
       state.mutate(d => {
         const item = (d.accounts || []).find(x => x.id === a.id);
-        if (!item) return;
-        if (!item.snapshots) item.snapshots = [];
-        const existing = item.snapshots.find(s => s.date === today);
-        if (existing) existing.balance = amt;
-        else item.snapshots.push({ date: today, balance: amt });
-        item.snapshots.sort((x, y) => x.date.localeCompare(y.date));
+        if (item) applySnapshot(item, today, amt);
       }, `snapshot: ${accountLabel(a)} ${fmtMoney(amt)}`);
       toast(`Snapshot saved: ${accountLabel(a)} ${fmtMoney(amt)}`, 'success');
     },
   });
+}
+
+// Bulk snapshot: one form, every open account, all fields optional.
+// Blank = skip (no snapshot written for that account). Investment types first.
+function openBulkSnapshotModal() {
+  const data = state.get().data;
+  if (!data) return;
+  const open = accounts(data).filter(a => a.status !== 'closed');
+  if (!open.length) { toast('No open accounts', 'error'); return; }
+
+  const typeOrder = (t) => {
+    const i = INVEST_TYPES.indexOf(t);
+    return i !== -1 ? i : INVEST_TYPES.length + TYPES.indexOf(t);
+  };
+  const list = [...open].sort((a, b) =>
+    typeOrder(a.type) - typeOrder(b.type) || accountLabel(a).localeCompare(accountLabel(b)));
+
+  const rowsHTML = list.map(a => {
+    const snap = latestSnapshot(a);
+    const lastInfo = snap
+      ? `last ${fmtMoney(snap.balance)} · ${relativeDays(snap.date)}`
+      : 'no snapshots yet';
+    return `
+      <div class="bulk-snap-row">
+        <div class="bulk-snap-info">
+          <b>${escapeHTML(accountLabel(a))}</b>
+          <span>${TYPE_LABELS[a.type] || a.type} · ${lastInfo}</span>
+        </div>
+        <input type="number" step="0.01" inputmode="decimal" data-snap-id="${a.id}"
+          placeholder="${snap ? snap.balance : 'balance'}"/>
+      </div>`;
+  }).join('');
+
+  const el = document.createElement('div');
+  el.className = 'modal-backdrop';
+  el.innerHTML = `
+    <div class="modal modal-lg">
+      <h2>Update balances</h2>
+      <p class="bulk-snap-hint">Snapshots dated today. Leave a field blank to skip that account.</p>
+      <div class="bulk-snap-list">${rowsHTML}</div>
+      <div class="modal-actions">
+        <button class="btn" id="bs-cancel">Cancel</button>
+        <span style="flex:1"></span>
+        <button class="btn primary" id="bs-save">Save snapshots</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(el);
+  el.querySelector('#bs-cancel').onclick = () => el.remove();
+  el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
+  closeOnEscape(el);
+  el.querySelector('input[data-snap-id]')?.focus();
+
+  el.querySelector('#bs-save').onclick = () => {
+    const entries = [];
+    for (const input of el.querySelectorAll('input[data-snap-id]')) {
+      const raw = input.value.trim();
+      if (raw === '') continue;
+      const amt = parseFloat(raw);
+      if (isNaN(amt)) { toast('Enter valid amounts (or leave blank to skip)', 'error'); return; }
+      entries.push({ id: input.dataset.snapId, amt });
+    }
+    if (!entries.length) { toast('All fields blank — nothing to save', 'error'); return; }
+
+    const today = todayISO();
+    const names = entries.map(e => accountLabel(open.find(a => a.id === e.id)));
+    const label = names.length <= 2
+      ? `bulk snapshot: ${names.join(', ')}`
+      : `bulk snapshot: ${names.slice(0, 2).join(', ')} +${names.length - 2} more`;
+    state.mutate(d => {
+      for (const { id, amt } of entries) {
+        const item = (d.accounts || []).find(x => x.id === id);
+        if (item) applySnapshot(item, today, amt);
+      }
+    }, label);
+    el.remove();
+    toast(`Saved ${entries.length} snapshot${entries.length > 1 ? 's' : ''}`, 'success');
+  };
 }
 
 // ---------- form ----------

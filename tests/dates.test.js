@@ -8,7 +8,7 @@ import {
 } from '../js/core/dates.js';
 import {
   yearProgress, statusForRow, cadenceAnchorMonth, rotation, getAttentionItems,
-  dueMonthInfo, billStatusDisplay,
+  dueMonthInfo, billStatusDisplay, snapshotAt, balanceSeries, seriesDelta,
 } from '../js/core/derive.js';
 
 // ---------- periodFor ----------
@@ -420,4 +420,84 @@ test('attention: cancelled sub past end date produces nothing', () => {
   ]);
   const items = getAttentionItems(data);
   assert.equal(items.filter(i => i.kind.startsWith('sub_')).length, 0);
+});
+
+// ---------- account balance series (accounts trend chart) ----------
+
+const acct = (snaps) => ({ snapshots: snaps });
+
+test('snapshotAt: most recent on or before date', () => {
+  const a = acct([{ date: '2026-01-10', balance: 100 }, { date: '2026-03-05', balance: 120 }]);
+  assert.equal(snapshotAt(a, '2026-02-01').balance, 100);
+  assert.equal(snapshotAt(a, '2026-03-05').balance, 120);
+  assert.equal(snapshotAt(a, '2026-01-09'), null);
+  assert.equal(snapshotAt(acct([]), '2026-01-01'), null);
+  assert.equal(snapshotAt({}, '2026-01-01'), null);
+});
+
+test('snapshotAt: tolerates unsorted snapshots', () => {
+  const a = acct([{ date: '2026-03-05', balance: 120 }, { date: '2026-01-10', balance: 100 }]);
+  assert.equal(snapshotAt(a, '2026-02-01').balance, 100);
+});
+
+test('balanceSeries: sums accounts, dots only on real snapshot dates', () => {
+  const a = acct([{ date: '2026-01-10', balance: 100 }]);
+  const b = acct([{ date: '2026-02-10', balance: 50 }]);
+  const pts = balanceSeries([a, b], '2026-01-01', '2026-03-01');
+  assert.deepEqual(pts.map(p => p.date), ['2026-01-10', '2026-02-10', '2026-03-01']);
+  assert.deepEqual(pts.map(p => p.value), [100, 150, 150]);
+  assert.deepEqual(pts.map(p => p.real), [true, true, false]);
+});
+
+test('balanceSeries: pre-window history forward-fills a synthetic start point', () => {
+  const a = acct([{ date: '2025-11-01', balance: 80 }, { date: '2026-02-10', balance: 95 }]);
+  const pts = balanceSeries([a], '2026-01-01', '2026-03-01');
+  assert.deepEqual(pts.map(p => p.date), ['2026-01-01', '2026-02-10', '2026-03-01']);
+  assert.deepEqual(pts.map(p => p.value), [80, 95, 95]);
+  assert.equal(pts[0].real, false);
+});
+
+test('balanceSeries: no start point invented when history starts mid-window', () => {
+  const a = acct([{ date: '2026-02-10', balance: 95 }]);
+  const pts = balanceSeries([a], '2026-01-01', '2026-03-01');
+  assert.equal(pts[0].date, '2026-02-10');
+});
+
+test('balanceSeries: account with later first snapshot contributes 0 before it', () => {
+  const a = acct([{ date: '2026-01-10', balance: 100 }]);
+  const b = acct([{ date: '2026-02-10', balance: 500 }]);
+  const pts = balanceSeries([a, b], '2026-01-01', '2026-03-01');
+  assert.equal(pts.find(p => p.date === '2026-01-10').value, 100); // b not yet visible
+});
+
+test('balanceSeries: snapshot exactly on window edges', () => {
+  const a = acct([{ date: '2026-01-01', balance: 10 }, { date: '2026-03-01', balance: 20 }]);
+  const pts = balanceSeries([a], '2026-01-01', '2026-03-01');
+  assert.deepEqual(pts.map(p => [p.date, p.real]), [['2026-01-01', true], ['2026-03-01', true]]);
+});
+
+test('balanceSeries: empty inputs', () => {
+  assert.deepEqual(balanceSeries([], '2026-01-01', '2026-03-01'), []);
+  assert.deepEqual(balanceSeries([acct([]), {}], '2026-01-01', '2026-03-01'), []);
+});
+
+test('balanceSeries: only pre-window history still yields carried flat line', () => {
+  const a = acct([{ date: '2025-06-01', balance: 70 }]);
+  const pts = balanceSeries([a], '2026-01-01', '2026-03-01');
+  assert.deepEqual(pts.map(p => [p.date, p.value, p.real]),
+    [['2026-01-01', 70, false], ['2026-03-01', 70, false]]);
+});
+
+test('seriesDelta: delta and pct', () => {
+  const d = seriesDelta([{ value: 100 }, { value: 150 }]);
+  assert.equal(d.delta, 50);
+  assert.equal(d.pct, 50);
+  assert.equal(d.start, 100);
+  assert.equal(d.end, 150);
+});
+
+test('seriesDelta: null for <2 points, null pct on zero base', () => {
+  assert.equal(seriesDelta([]), null);
+  assert.equal(seriesDelta([{ value: 5 }]), null);
+  assert.equal(seriesDelta([{ value: 0 }, { value: 40 }]).pct, null);
 });

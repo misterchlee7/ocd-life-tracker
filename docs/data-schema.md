@@ -287,7 +287,7 @@ Urgency tiers (based on days until `expiry_date`):
 
 Registry of financial accounts (bank, brokerage, retirement, …). Read-mostly: "what accounts exist, who owns them, why". The `accounts` array is optional at the top level — always access as `data.accounts || []` and guard writes with `if (!d.accounts) d.accounts = []`.
 
-**No live balance tracking.** Balances are optional manual snapshots (`snapshots[]`), appended via the "Add balance snapshot" row action. The latest snapshot (by date) is what the UI shows, alongside its age. One snapshot per date — re-snapshotting the same day replaces that entry.
+**No live balance tracking.** Balances are optional manual snapshots (`snapshots[]`), appended via the "Add balance snapshot" row action or the bulk "Update balances" flow (blank field = account skipped). The latest snapshot (by date) is what the UI shows, alongside its age. One snapshot per date — re-snapshotting the same day replaces that entry. Snapshot history also feeds the balance trend chart (investment types), which forward-fills between snapshots — see `docs/decisions.md`. Marking an account `closed` writes a `$0` snapshot in the same mutation (when the latest balance is non-zero) so the chart's aggregate history stays accurate.
 
 ```jsonc
 {

@@ -342,3 +342,60 @@ export function getAttentionItems(data) {
 
   return items;
 }
+
+// ---------- account balance series (accounts tab trend chart) ----------
+
+// Most recent snapshot on or before dateISO, or null. Snapshots are kept
+// ascending, but scan defensively in case of hand-edited data.
+export function snapshotAt(account, dateISO) {
+  let best = null;
+  for (const s of (account.snapshots || [])) {
+    if (s.date <= dateISO && (!best || s.date > best.date)) best = s;
+  }
+  return best;
+}
+
+// Forward-filled balance time series for a set of accounts over [startISO, endISO].
+// Each account contributes its most recent snapshot balance at every point; an
+// account with no snapshot yet at a given date contributes 0 (its balance "appears"
+// at its first snapshot — accepted fuzziness, see docs/decisions.md).
+//
+// Points are the union of in-window snapshot dates, marked real: true. Two
+// synthetic (real: false) points may be added: one at startISO when any account
+// has pre-window history to carry forward, and one at endISO so the line extends
+// to the end of the window (matches the "Snapshot total" summary card, which also
+// carries latest balances forward). Balance growth here includes contributions —
+// this is balance over time, not investment performance.
+export function balanceSeries(accountList, startISO, endISO) {
+  const dates = new Set();
+  let hasPrior = false;
+  for (const a of accountList) {
+    for (const s of (a.snapshots || [])) {
+      if (s.date < startISO) hasPrior = true;
+      else if (s.date <= endISO) dates.add(s.date);
+    }
+  }
+  const real = [...dates].sort();
+  if (!real.length && !hasPrior) return [];
+  const all = [...real];
+  if (hasPrior && all[0] !== startISO) all.unshift(startISO);
+  if (all[all.length - 1] !== endISO) all.push(endISO);
+  return all.map(date => ({
+    date,
+    value: accountList.reduce((sum, a) => sum + (snapshotAt(a, date)?.balance ?? 0), 0),
+    real: dates.has(date),
+  }));
+}
+
+// Change over a series from balanceSeries(). Returns null when there aren't two
+// points to compare. pct is null when the series starts at 0 (no meaningful base).
+export function seriesDelta(points) {
+  if (points.length < 2) return null;
+  const start = points[0].value;
+  const end = points[points.length - 1].value;
+  return {
+    start, end,
+    delta: end - start,
+    pct: start !== 0 ? ((end - start) / start) * 100 : null,
+  };
+}
