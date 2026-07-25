@@ -126,6 +126,15 @@ export function billStatusDisplay(data, bill, status, monthISO) {
   return { key: 'not_due', label: `${BILL_STATUS_LABELS.not_due} · ${MONTH_SHORT[info.dueMonthIdx]}` };
 }
 
+// Derived warranty status. `claimed_date` (warranty used/redeemed) wins over
+// expiry — a fulfilled warranty is no longer valid whatever its expiry date says.
+export function warrantyStatus(w, todayStr = todayISO()) {
+  if (!w) return 'active';
+  if (w.claimed_date) return 'used';
+  if (w.expiry_date && w.expiry_date < todayStr) return 'expired';
+  return 'active';
+}
+
 // Comprehensive attention items for the Dashboard hub.
 // Returns an array of { zone (1|2), kind, label, detail, link }.
 //   Zone 1 = Needs Action (urgent, red)
@@ -258,7 +267,7 @@ export function getAttentionItems(data) {
 
   // Warranties expiring within 30 days (not yet expired)
   for (const w of (data.warranties || [])) {
-    if (w.archived || !w.expiry_date) continue;
+    if (w.archived || w.claimed_date || !w.expiry_date) continue;
     const days = daysFromToday(w.expiry_date);
     if (days >= 0 && days <= 30) {
       const when = days === 0 ? 'today' : `in ${days}d`;

@@ -272,16 +272,24 @@ Tracks product warranties. The `warranties` array is optional at the top level �
   "purchase_date": "2024-11-25",     // optional; ISO date
   "expiry_date": "2026-11-25",       // optional; ISO date — drives urgency coloring
   "coverage": "2-year limited, parts & labor",  // optional; free-text coverage description
+  "claimed_date": null,              // optional; ISO date the warranty was used/redeemed. Non-null ⇒ status "used"
+  "claim_notes": "",                 // optional; free-text what was claimed ("mattress replaced, full refund")
   "archived": false,
   "notes": ""
 }
 ```
 
-Urgency tiers (based on days until `expiry_date`):
+Derived status — `warrantyStatus(w)` in `derive.js` returns `used` | `expired` | `active`:
+- `used` — `claimed_date` set. Warranty was consumed/fulfilled, so it is no longer valid regardless of `expiry_date`. Takes precedence over `expired`.
+- `expired` — `expiry_date` in the past.
+- `active` — everything else (including no `expiry_date`).
+
+Urgency tiers (based on days until `expiry_date`; only for `active`):
 - **≤ 7 days**: red row background + red filled badge ("Xd left")
 - **≤ 30 days**: amber row background + red-outline badge ("Xd left")
 - **≤ 90 days**: amber-outline badge ("Xd left")
 - **Expired** (past date): faded row (opacity 0.55) + dark red "Expired" badge
+- **Used**: faded row + green "Used" badge, expiry date struck through. Excluded from active counts, urgency rows, and `warranty_expiry` attention items.
 
 ## `Account`
 

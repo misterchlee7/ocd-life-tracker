@@ -1,6 +1,7 @@
 import { state, uid } from '../core/state.js';
 import { bootstrap, isMobile, whoPill, toast, positionMenu, confirmModal, closeOnEscape, pageHeaderHTML } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
+import { warrantyStatus } from '../core/derive.js';
 import {
   escapeHTML, escapeAttr, truncate,
   WARRANTY_CATEGORIES as CATEGORIES, WARRANTY_CAT_LABELS as CAT_LABELS,
@@ -14,6 +15,7 @@ const ui = {
   category: 'all',
   showArchived: false,
   showExpired: true,
+  showUsed: true,
   sort: { key: 'expiry_date', dir: 'asc' },
   openMenuId: null,
 };
@@ -25,18 +27,24 @@ function warranties(data) {
 }
 
 function isExpired(w) {
+  if (w.claimed_date) return false;
   if (!w.expiry_date) return false;
   return daysFromToday(w.expiry_date) < 0;
+}
+
+function isUsed(w) {
+  return !!w.claimed_date;
 }
 
 function filterWarranties(data) {
   const q = ui.search.trim().toLowerCase();
   return warranties(data).filter(w => {
     if (!ui.showArchived && w.archived) return false;
+    if (!ui.showUsed && isUsed(w)) return false;
     if (!ui.showExpired && isExpired(w)) return false;
     if (ui.who !== 'all' && w.who !== ui.who) return false;
     if (ui.category !== 'all' && w.category !== ui.category) return false;
-    if (q && !(`${w.name} ${w.brand || ''} ${w.store || ''} ${w.serial || ''} ${w.notes || ''}`.toLowerCase().includes(q))) return false;
+    if (q && !(`${w.name} ${w.brand || ''} ${w.store || ''} ${w.serial || ''} ${w.notes || ''} ${w.claim_notes || ''}`.toLowerCase().includes(q))) return false;
     return true;
   });
 }
@@ -56,6 +64,7 @@ function sortWarranties(list) {
 }
 
 function expiryUrgency(w) {
+  if (w.claimed_date) return 'used';
   if (!w.expiry_date) return '';
   const days = daysFromToday(w.expiry_date);
   if (days < 0) return 'expired';
@@ -76,8 +85,9 @@ function render({ data, loading }) {
 
   const all = warranties(data).filter(w => !w.archived);
   const today = todayISO();
-  const active = all.filter(w => !w.expiry_date || w.expiry_date >= today);
-  const expired = all.filter(w => w.expiry_date && w.expiry_date < today);
+  const used = all.filter(w => warrantyStatus(w, today) === 'used');
+  const active = all.filter(w => warrantyStatus(w, today) === 'active');
+  const expired = all.filter(w => warrantyStatus(w, today) === 'expired');
   const expiring90 = active.filter(w => {
     const d = daysFromToday(w.expiry_date);
     return d >= 0 && d <= 90;
@@ -89,7 +99,7 @@ function render({ data, loading }) {
   page.innerHTML = `
     ${pageHeaderHTML('Warranties', `${active.length} active`,
       `<button class="btn primary" id="btn-add">+ Add warranty</button>`)}
-    ${summaryHTML({ activeCount: active.length, expiredCount: expired.length, expiring90Count: expiring90.length, nextExpiry })}
+    ${summaryHTML({ activeCount: active.length, expiredCount: expired.length, usedCount: used.length, expiring90Count: expiring90.length, nextExpiry })}
     ${filtersHTML(data)}
     ${filtered.length === 0
       ? `<div class="empty"><h3>No warranties</h3><p>Click + Add warranty to track your first one.</p></div>`
@@ -99,11 +109,11 @@ function render({ data, loading }) {
   wireInteractions(data);
 }
 
-function summaryHTML({ activeCount, expiredCount, expiring90Count, nextExpiry }) {
+function summaryHTML({ activeCount, expiredCount, usedCount, expiring90Count, nextExpiry }) {
   const nextLabel = nextExpiry ? shortDate(nextExpiry.expiry_date) : '—';
-  const nextSub = nextExpiry ? `${nextExpiry.name} · ${relativeDays(nextExpiry.expiry_date)}` : 'nothing upcoming';
+  const nextSub = nextExpiry ? `${escapeHTML(nextExpiry.name)} · ${relativeDays(nextExpiry.expiry_date)}` : 'nothing upcoming';
   return `
-    <div class="summary">
+    <div class="summary summary-5">
       <div class="card">
         <div class="label">Active warranties</div>
         <div class="value">${activeCount}</div>
@@ -120,8 +130,13 @@ function summaryHTML({ activeCount, expiredCount, expiring90Count, nextExpiry })
         <div class="sub">${nextSub}</div>
       </div>
       <div class="card">
+        <div class="label">Used</div>
+        <div class="value">${usedCount}</div>
+        <div class="sub">claimed / fulfilled</div>
+      </div>
+      <div class="card">
         <div class="label">Expired</div>
-        <div class="value ${expiredCount ? '' : ''}">${expiredCount}</div>
+        <div class="value">${expiredCount}</div>
         <div class="sub">keep for reference</div>
       </div>
     </div>
@@ -146,6 +161,9 @@ function filtersHTML(data) {
       </select>
       <label class="chip ${ui.showExpired ? 'active' : ''}" style="cursor:pointer">
         <input type="checkbox" id="f-expired" ${ui.showExpired ? 'checked' : ''} style="display:none"> Show expired
+      </label>
+      <label class="chip ${ui.showUsed ? 'active' : ''}" style="cursor:pointer">
+        <input type="checkbox" id="f-used" ${ui.showUsed ? 'checked' : ''} style="display:none"> Show used
       </label>
     </div>
   `;
@@ -183,6 +201,7 @@ function tableHTML(list) {
 }
 
 function expiryBadge(w) {
+  if (w.claimed_date) return `<span class="expiry-badge badge-used">Used</span>`;
   if (!w.expiry_date) return '';
   const days = daysFromToday(w.expiry_date);
   if (days < 0) return `<span class="expiry-badge badge-expired">Expired</span>`;
@@ -194,18 +213,25 @@ function expiryBadge(w) {
 
 function warrantyRowHTML(w) {
   const urgency = expiryUrgency(w);
+  const used = urgency === 'used';
   const expired = urgency === 'expired';
-  const days = w.expiry_date ? daysFromToday(w.expiry_date) : null;
+  const days = !used && w.expiry_date ? daysFromToday(w.expiry_date) : null;
   const rowUrgencyClass = days !== null && days <= 7 && days >= 0 ? 'warranty-urgent'
     : days !== null && days <= 30 && days >= 0 ? 'warranty-warn' : '';
-  const expiryDisplay = w.expiry_date
-    ? `<div class="expiry-cell">
-        <span class="${urgency !== 'expired' ? urgency : 'renewal-due'}">${shortDate(w.expiry_date)}</span>
-        ${expiryBadge(w)}
+  const usedSub = used
+    ? `<div class="expiry-used-sub">Used ${w.claimed_date ? shortDate(w.claimed_date) : ''}${w.claim_notes ? ` · ${escapeHTML(truncate(w.claim_notes, 24))}` : ''}</div>`
+    : '';
+  const expiryDisplay = w.expiry_date || used
+    ? `<div class="expiry-cell ${used ? 'stacked' : ''}">
+        <div class="expiry-line">
+          ${w.expiry_date ? `<span class="${used ? 'expiry-struck' : urgency !== 'expired' ? urgency : 'renewal-due'}">${shortDate(w.expiry_date)}</span>` : '<span>—</span>'}
+          ${expiryBadge(w)}
+        </div>
+        ${usedSub}
        </div>`
     : '—';
   return `
-    <tr data-id="${w.id}" class="${w.archived ? 'archived' : ''} ${expired ? 'warranty-expired' : ''} ${rowUrgencyClass}">
+    <tr data-id="${w.id}" class="${w.archived ? 'archived' : ''} ${expired ? 'warranty-expired' : ''} ${used ? 'warranty-used' : ''} ${rowUrgencyClass}">
       <td><b>${escapeHTML(w.name)}</b></td>
       <td class="note-cell" data-brand-id="${w.id}" title="${escapeAttr(w.brand || '')}">${truncate(w.brand || '', 20)}</td>
       <td>${whoPill(w.who)}</td>
@@ -228,6 +254,10 @@ function rowMenuHTML(w) {
   return `
     <div class="menu" data-id="${w.id}">
       <div class="menu-item" data-act="edit"><div class="title">✏️ Edit</div></div>
+      <div class="menu-sep"></div>
+      ${w.claimed_date
+        ? `<div class="menu-item" data-act="unuse"><div class="title">↩︎ Unmark used</div><div class="desc">restore as still valid</div></div>`
+        : `<div class="menu-item" data-act="use"><div class="title">✅ Mark warranty used</div><div class="desc">claimed / fulfilled — no longer valid</div></div>`}
       <div class="menu-sep"></div>
       <div class="menu-item" data-act="archive"><div class="title">🗄️ ${w.archived ? 'Unarchive' : 'Archive'}</div></div>
       <div class="menu-item danger" data-act="delete"><div class="title">🗑️ Delete</div></div>
@@ -252,6 +282,9 @@ function wireInteractions(data) {
   });
   document.getElementById('f-expired')?.addEventListener('change', (e) => {
     ui.showExpired = e.target.checked; render(state.get());
+  });
+  document.getElementById('f-used')?.addEventListener('change', (e) => {
+    ui.showUsed = e.target.checked; render(state.get());
   });
   document.getElementById('btn-add')?.addEventListener('click', () => openForm());
 
@@ -386,6 +419,15 @@ function handleMenuAction(id, act) {
   if (!w) return;
   switch (act) {
     case 'edit': openForm(w); break;
+    case 'use': openUseModal(w); break;
+    case 'unuse':
+      state.mutate(d => {
+        const item = (d.warranties || []).find(x => x.id === id);
+        if (item) { item.claimed_date = null; item.claim_notes = ''; }
+      }, `unmark warranty used: ${w.name}`);
+      toast(`Restored: ${w.name}`, 'info');
+      render(state.get());
+      break;
     case 'archive':
       state.mutate(d => {
         const item = (d.warranties || []).find(x => x.id === id);
@@ -409,6 +451,49 @@ function handleMenuAction(id, act) {
   }
 }
 
+// ---------- mark used ----------
+
+// Marking a warranty used = it was claimed/redeemed, so it's no longer valid
+// regardless of expiry_date. Needs a date + free-text note, so it gets its own
+// modal (amountModal is numeric-only).
+function openUseModal(w) {
+  // the row menu is body-appended by positionMenu; drop it so it can't sit over the modal
+  document.querySelectorAll('body > .menu').forEach(m => m.remove());
+  const el = document.createElement('div');
+  el.className = 'modal-backdrop';
+  el.innerHTML = `
+    <div class="modal">
+      <h2>Mark warranty used</h2>
+      <p class="modal-sub">${escapeHTML(w.name)} — claiming the warranty fulfils it. Row stays for reference, marked no longer valid.</p>
+      <div class="form-grid">
+        <label class="field"><span>Date used</span><input id="u-date" type="date" value="${todayISO()}"/></label>
+        <label class="field"><span>What was claimed</span><input id="u-notes" placeholder="e.g. mattress replaced"/></label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="u-cancel">Cancel</button>
+        <span style="flex:1"></span>
+        <button class="btn primary" id="u-save">Mark used</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(el);
+  el.querySelector('#u-cancel').onclick = () => el.remove();
+  el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
+  closeOnEscape(el);
+  el.querySelector('#u-notes').focus();
+  el.querySelector('#u-save').onclick = () => {
+    const date = el.querySelector('#u-date').value || todayISO();
+    const notes = el.querySelector('#u-notes').value.trim();
+    state.mutate(d => {
+      const item = (d.warranties || []).find(x => x.id === w.id);
+      if (item) { item.claimed_date = date; item.claim_notes = notes; }
+    }, `mark warranty used: ${w.name}${notes ? ` (${notes})` : ''}`);
+    el.remove();
+    toast(`Marked used: ${w.name}`, 'success');
+    render(state.get());
+  };
+}
+
 // ---------- form ----------
 
 function openForm(existing) {
@@ -416,7 +501,7 @@ function openForm(existing) {
   const w = existing || {
     id: uid(), name: '', brand: '', who: 'joint', category: 'electronics',
     store: '', serial: '', purchase_date: '', expiry_date: '', coverage: '',
-    archived: false, notes: '',
+    claimed_date: null, claim_notes: '', archived: false, notes: '',
   };
 
   const el = document.createElement('div');
@@ -431,6 +516,8 @@ function openForm(existing) {
         <label class="field"><span>Purchase date</span><input id="f-purchase" type="date" value="${w.purchase_date || ''}"/></label>
         <label class="field"><span>Warranty expires</span><input id="f-expiry" type="date" value="${w.expiry_date || ''}"/></label>
         <label class="field full"><span>Coverage note</span><input id="f-coverage" value="${escapeAttr(w.coverage || '')}" placeholder="e.g. 2-year limited, parts &amp; labor"/></label>
+        <label class="field"><span>Used / claimed on</span><input id="f-claimed" type="date" value="${w.claimed_date || ''}"/></label>
+        <label class="field"><span>What was claimed</span><input id="f-claim-notes" value="${escapeAttr(w.claim_notes || '')}" placeholder="e.g. mattress replaced"/></label>
         <label class="field full"><span>Notes</span><input id="f-notes" value="${escapeAttr(w.notes || '')}"/></label>
       </div>
       <div class="modal-actions">
@@ -455,6 +542,8 @@ function openForm(existing) {
       purchase_date: el.querySelector('#f-purchase').value || null,
       expiry_date: el.querySelector('#f-expiry').value || null,
       coverage: el.querySelector('#f-coverage').value.trim(),
+      claimed_date: el.querySelector('#f-claimed').value || null,
+      claim_notes: el.querySelector('#f-claim-notes').value.trim(),
       notes: el.querySelector('#f-notes').value.trim(),
     };
     state.mutate(d => {

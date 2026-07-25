@@ -9,6 +9,7 @@ import {
 import {
   yearProgress, statusForRow, cadenceAnchorMonth, rotation, getAttentionItems,
   dueMonthInfo, billStatusDisplay, snapshotAt, balanceSeries, seriesDelta,
+  warrantyStatus,
 } from '../js/core/derive.js';
 
 // ---------- periodFor ----------
@@ -500,4 +501,28 @@ test('seriesDelta: null for <2 points, null pct on zero base', () => {
   assert.equal(seriesDelta([]), null);
   assert.equal(seriesDelta([{ value: 5 }]), null);
   assert.equal(seriesDelta([{ value: 0 }, { value: 40 }]).pct, null);
+});
+
+// ---------- derive: warrantyStatus ----------
+
+test('warrantyStatus: claimed_date wins over expiry (used, not expired/active)', () => {
+  assert.equal(warrantyStatus({ claimed_date: '2026-01-05', expiry_date: '2030-01-01' }, '2026-07-01'), 'used');
+  assert.equal(warrantyStatus({ claimed_date: '2026-01-05', expiry_date: '2026-02-01' }, '2026-07-01'), 'used');
+});
+
+test('warrantyStatus: expired vs active by date, no expiry = active', () => {
+  assert.equal(warrantyStatus({ expiry_date: '2026-06-30' }, '2026-07-01'), 'expired');
+  assert.equal(warrantyStatus({ expiry_date: '2026-07-01' }, '2026-07-01'), 'active');
+  assert.equal(warrantyStatus({ expiry_date: null }, '2026-07-01'), 'active');
+  assert.equal(warrantyStatus({}, '2026-07-01'), 'active');
+});
+
+test('attention: used warranty produces no warranty_expiry item', () => {
+  const soon = isoDaysFromNow(10);
+  const base = emptyData([]);
+  const withOpen = { ...base, warranties: [{ id: 'w1', name: 'TV', expiry_date: soon }] };
+  assert.ok(getAttentionItems(withOpen).find(i => i.kind === 'warranty_expiry'));
+
+  const withUsed = { ...base, warranties: [{ id: 'w1', name: 'TV', expiry_date: soon, claimed_date: isoDaysFromNow(-2) }] };
+  assert.equal(getAttentionItems(withUsed).find(i => i.kind === 'warranty_expiry'), undefined);
 });

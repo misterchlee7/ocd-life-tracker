@@ -809,15 +809,21 @@ tr.row-selected td { background: var(--hover-accent); }
 .renewal-soon  .cell-amount-sub { color: var(--amber-fg); opacity: 0.8; }
 .balance-remaining { color: var(--text); font-weight: 500; margin-top: 1px; }
 tr.warranty-expired { opacity: 0.55; }
+tr.warranty-used    { opacity: 0.62; }
 tr.warranty-urgent { background: var(--row-urgent-bg); }
 tr.warranty-warn   { background: var(--row-warn-bg); }
 
 .expiry-cell { display: flex; align-items: center; gap: 6px; }
+.expiry-cell.stacked { flex-direction: column; align-items: flex-start; gap: 2px; }
+.expiry-line { display: flex; align-items: center; gap: 6px; }
+.expiry-struck { text-decoration: line-through; color: var(--text-muted); }
+.expiry-used-sub { font-size: 11px; color: var(--text-muted); }
 .expiry-badge { font-size: 10px; font-weight: 700; padding: 1px 5px; }
 .badge-expired { background: light-dark(#f0e0de, #33231f); color: light-dark(#7a2a22, #cf8a80); }
 .badge-urgent  { background: light-dark(#ffdddd, #3a2422); color: var(--red-fg); }
 .badge-warn    { background: var(--s-unpaid-bg); color: var(--red-fg); border: 1px solid light-dark(#f5c5c0, #55332e); }
 .badge-soon    { background: light-dark(#fef6e0, #33301a); color: var(--amber-fg); border: 1px solid light-dark(#f0dfa0, #57451c); }
+.badge-used    { background: light-dark(#e4f2e6, #1f2f22); color: var(--green-fg); }
 
 /* ---------- history page ---------- */
 .history-header {

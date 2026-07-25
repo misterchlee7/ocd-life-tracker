@@ -489,6 +489,22 @@ export function getDemoData() {
         notes: '',
         archived: false,
       },
+      {
+        id: 'demo-warranty-5',
+        name: 'Queen Mattress',
+        brand: 'Nectar',
+        who: 'joint',
+        category: 'furniture',
+        store: 'nectarsleep.com',
+        serial: 'NEC-Q-DEMO',
+        purchase_date: addDays(today, -900),
+        expiry_date: addDays(today, 2750),
+        coverage: 'Forever warranty',
+        claimed_date: addDays(today, -20),
+        claim_notes: 'sagging — replaced free',
+        notes: '',
+        archived: false,
+      },
     ],
 
     accounts: [
