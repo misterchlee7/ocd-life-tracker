@@ -1,6 +1,6 @@
 import { state, uid } from '../core/state.js';
 import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu, confirmModal, closeOnEscape, icon, pageHeaderHTML } from '../core/ui.js';
-import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
+import { todayISO, shortDate, relativeDays, daysFromToday, monthsPerCycle } from '../core/dates.js';
 import {
   escapeHTML, escapeAttr, truncate, FREQ_LABELS,
   SUB_CATEGORIES as CATEGORIES, SUB_CAT_LABELS as CAT_LABELS,
@@ -21,7 +21,7 @@ const ui = {
 };
 
 const FILTER_STATUSES = ['active', 'trial', 'paused', 'non_renewing']; // cancelled has its own section
-const FREQUENCIES = ['monthly', 'quarterly', 'semi_annual', 'biannual', 'annual', 'biennial'];
+const FREQUENCIES = ['monthly', 'quarterly', 'semi_annual', 'biannual', 'annual', 'biennial', 'triennial', 'quinquennial'];
 
 // For active subs, derive the next upcoming renewal from the stored anchor date
 // rather than relying on the stored value being kept up to date manually.
@@ -30,7 +30,7 @@ function computedRenewal(sub) {
   if (!sub.next_renewal || sub.status === 'cancelled' || sub.status === 'non_renewing') return sub.next_renewal;
   const today = todayISO();
   if (sub.next_renewal >= today) return sub.next_renewal;
-  const step = { monthly: 1, quarterly: 3, semi_annual: 6, biannual: 6, annual: 12, biennial: 24 }[sub.frequency] || 1;
+  const step = monthsPerCycle(sub.frequency) || 1;
   const d = new Date(sub.next_renewal + 'T00:00:00');
   while (d.toISOString().slice(0, 10) < today) {
     d.setMonth(d.getMonth() + step);
@@ -40,27 +40,14 @@ function computedRenewal(sub) {
 
 function monthlyCost(sub) {
   const amt = sub.amount || 0;
-  const f = sub.frequency;
-  if (f === 'monthly') return amt;
-  if (f === 'quarterly') return amt / 3;
-  if (f === 'semi_annual' || f === 'biannual') return amt / 6;
-  if (f === 'annual') return amt / 12;
-  if (f === 'biennial') return amt / 24;
-  return amt;
+  const months = monthsPerCycle(sub.frequency);
+  return months ? amt / months : amt;
 }
 
-// Monthly equivalent of the subsidized portion.
-// If subsidized_amount is set, normalize it like monthlyCost; otherwise assume fully covered.
 function monthlySubsidy(sub) {
   if (!sub.billed_to) return 0;
   const amt = sub.subsidized_amount != null ? sub.subsidized_amount : (sub.amount || 0);
-  const f = sub.frequency;
-  if (f === 'monthly') return amt;
-  if (f === 'quarterly') return amt / 3;
-  if (f === 'semi_annual' || f === 'biannual') return amt / 6;
-  if (f === 'annual') return amt / 12;
-  if (f === 'biennial') return amt / 24;
-  return amt;
+  return monthlyCost({ ...sub, amount: amt });
 }
 
 function filterSubs(data) {
@@ -156,27 +143,19 @@ function render({ data, loading }) {
 
 function summaryHTML({ count, grossMonthly, subsidizedMonthly, subsidizedCount, netMonthly, upcoming30, trialsExpiring }) {
   const upcomingTotal = upcoming30.reduce((a, s) => a + (s.amount || 0), 0);
+  const hasSubsidies = subsidizedMonthly > 0;
   return `
-    <div class="summary summary-5">
+    <div class="summary summary-3">
       <div class="card">
         <div class="label">Active subs</div>
         <div class="value">${count}</div>
         <div class="sub">excl. cancelled/archived</div>
       </div>
-      <div class="card">
-        <div class="label">Gross monthly</div>
-        <div class="value">${fmtMoney(grossMonthly)}</div>
-        <div class="sub">${fmtMoneyShort(grossMonthly * 12)}/yr before subsidies</div>
-      </div>
-      <div class="card">
-        <div class="label">Subsidized</div>
-        <div class="value">${fmtMoney(subsidizedMonthly)}</div>
-        <div class="sub">${subsidizedCount} sub${subsidizedCount !== 1 ? 's' : ''} covered by perks</div>
-      </div>
-      <div class="card">
+      <div class="card primary">
         <div class="label">Net monthly</div>
         <div class="value">${fmtMoney(netMonthly)}</div>
         <div class="sub">${fmtMoneyShort(netMonthly * 12)}/yr out of pocket</div>
+        ${hasSubsidies ? `<div class="sub">${fmtMoneyShort(grossMonthly)} gross − ${fmtMoneyShort(subsidizedMonthly)} perks (${subsidizedCount})</div>` : ''}
       </div>
       <div class="card">
         <div class="label">Non-monthly ≤ 30d</div>
@@ -648,7 +627,7 @@ function wireInteractions() {
 function advanceRenewal(sub) {
   if (!sub.next_renewal) return sub.next_renewal;
   const d = new Date(sub.next_renewal + 'T00:00:00');
-  const step = { monthly: 1, quarterly: 3, semi_annual: 6, biannual: 6, annual: 12, biennial: 24 }[sub.frequency] || 1;
+  const step = monthsPerCycle(sub.frequency) || 1;
   d.setMonth(d.getMonth() + step);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }

@@ -1,6 +1,6 @@
 import { state } from '../core/state.js';
 import { bootstrap, showBottomSheet, whoPill, fmtMoney, fmtMoneyShort, toast, icon } from '../core/ui.js';
-import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
+import { todayISO, shortDate, relativeDays, daysFromToday, monthsPerCycle } from '../core/dates.js';
 import { escapeHTML, SUB_STATUS_LABELS as STATUS_LABELS, SUB_CAT_LABELS as CAT_LABELS } from '../core/text.js';
 
 const page = document.getElementById('page');
@@ -8,24 +8,19 @@ const page = document.getElementById('page');
 const ui = { filter: 'all' };
 
 function computedRenewal(sub) {
-  // non_renewing: next_renewal is a fixed end date — never roll it forward
-  if (!sub.next_renewal || sub.frequency !== 'monthly' || sub.status === 'non_renewing') return sub.next_renewal;
+  if (!sub.next_renewal || sub.status === 'cancelled' || sub.status === 'non_renewing') return sub.next_renewal;
   const today = todayISO();
   if (sub.next_renewal >= today) return sub.next_renewal;
+  const step = monthsPerCycle(sub.frequency) || 1;
   const d = new Date(sub.next_renewal + 'T00:00:00');
-  while (d.toISOString().slice(0, 10) < today) d.setMonth(d.getMonth() + 1);
+  while (d.toISOString().slice(0, 10) < today) d.setMonth(d.getMonth() + step);
   return d.toISOString().slice(0, 10);
 }
 
 function monthlyCost(sub) {
   const amt = sub.amount || 0;
-  const f = sub.frequency;
-  if (f === 'monthly') return amt;
-  if (f === 'quarterly') return amt / 3;
-  if (f === 'semi_annual' || f === 'biannual') return amt / 6;
-  if (f === 'annual') return amt / 12;
-  if (f === 'biennial') return amt / 24;
-  return amt;
+  const months = monthsPerCycle(sub.frequency);
+  return months ? amt / months : amt;
 }
 
 function monthlySubsidy(sub) {
@@ -62,7 +57,7 @@ function summaryStripHTML(data) {
       <div class="m-summary-card">
         <div class="label">Net monthly</div>
         <div class="value">${fmtMoney(netMonthly)}</div>
-        <div class="sub">${fmtMoneyShort(grossMonthly)} gross</div>
+        <div class="sub">${subsidized > 0 ? `${fmtMoneyShort(grossMonthly)} − ${fmtMoneyShort(subsidized)} perks` : `${fmtMoneyShort(grossMonthly)} gross`}</div>
       </div>
       <div class="m-summary-card">
         <div class="label">Renewing ≤30d</div>
@@ -197,7 +192,7 @@ function wireInteractions(data) {
 function advanceRenewal(sub) {
   if (!sub.next_renewal) return sub.next_renewal;
   const d = new Date(sub.next_renewal + 'T00:00:00');
-  const step = { monthly: 1, quarterly: 3, semi_annual: 6, biannual: 6, annual: 12, biennial: 24 }[sub.frequency] || 1;
+  const step = monthsPerCycle(sub.frequency) || 1;
   d.setMonth(d.getMonth() + step);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }

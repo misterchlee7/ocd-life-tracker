@@ -5,6 +5,22 @@ export const FREQUENCIES = [
   'annual', 'biennial', 'triennial', 'quinquennial', 'one_time', 'variable',
 ];
 
+// Months per billing cycle for a given frequency.
+export function monthsPerCycle(freq) {
+  switch (freq) {
+    case 'monthly': return 1;
+    case 'bimonthly': return 2;
+    case 'quarterly': return 3;
+    case 'biannual':
+    case 'semi_annual': return 6;
+    case 'annual': return 12;
+    case 'biennial': return 24;
+    case 'triennial': return 36;
+    case 'quinquennial': return 60;
+    default: return null;
+  }
+}
+
 // Number of occurrences per calendar year for a given frequency.
 // Used for progress bars ("1/2 done for 2026").
 export function occurrencesPerYear(freq) {

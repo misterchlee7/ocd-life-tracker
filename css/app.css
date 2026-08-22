@@ -376,6 +376,7 @@ th.sorted .sort-icon { color: var(--accent); }
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
   margin-bottom: 14px;
 }
+.summary.summary-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .summary.summary-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .summary .card { padding: 10px 14px; }
 .summary .label {

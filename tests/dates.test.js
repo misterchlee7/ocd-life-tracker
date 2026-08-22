@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  periodFor, nextOccurrence, daysBetween, occurrencesPerYear, todayISO,
+  periodFor, nextOccurrence, daysBetween, occurrencesPerYear, monthsPerCycle, todayISO,
 } from '../js/core/dates.js';
 import {
   yearProgress, statusForRow, cadenceAnchorMonth, rotation, getAttentionItems,
@@ -525,4 +525,43 @@ test('attention: used warranty produces no warranty_expiry item', () => {
 
   const withUsed = { ...base, warranties: [{ id: 'w1', name: 'TV', expiry_date: soon, claimed_date: isoDaysFromNow(-2) }] };
   assert.equal(getAttentionItems(withUsed).find(i => i.kind === 'warranty_expiry'), undefined);
+});
+
+// ---------- monthsPerCycle ----------
+
+test('monthsPerCycle: all standard frequencies', () => {
+  assert.equal(monthsPerCycle('monthly'), 1);
+  assert.equal(monthsPerCycle('bimonthly'), 2);
+  assert.equal(monthsPerCycle('quarterly'), 3);
+  assert.equal(monthsPerCycle('semi_annual'), 6);
+  assert.equal(monthsPerCycle('biannual'), 6);
+  assert.equal(monthsPerCycle('annual'), 12);
+  assert.equal(monthsPerCycle('biennial'), 24);
+  assert.equal(monthsPerCycle('triennial'), 36);
+  assert.equal(monthsPerCycle('quinquennial'), 60);
+});
+
+test('monthsPerCycle: unknown/special frequencies return null', () => {
+  assert.equal(monthsPerCycle('one_time'), null);
+  assert.equal(monthsPerCycle('variable'), null);
+  assert.equal(monthsPerCycle('bogus'), null);
+});
+
+test('monthsPerCycle: monthly equivalent math is correct', () => {
+  const amt = 360;
+  assert.equal(amt / monthsPerCycle('monthly'), 360);
+  assert.equal(amt / monthsPerCycle('quarterly'), 120);
+  assert.equal(amt / monthsPerCycle('semi_annual'), 60);
+  assert.equal(amt / monthsPerCycle('annual'), 30);
+  assert.equal(amt / monthsPerCycle('biennial'), 15);
+  assert.equal(amt / monthsPerCycle('triennial'), 10);
+  assert.equal(amt / monthsPerCycle('quinquennial'), 6);
+});
+
+test('monthsPerCycle: consistent with occurrencesPerYear', () => {
+  for (const freq of ['monthly', 'bimonthly', 'quarterly', 'semi_annual', 'biannual', 'annual', 'biennial', 'triennial', 'quinquennial']) {
+    const months = monthsPerCycle(freq);
+    const occ = occurrencesPerYear(freq);
+    assert.equal(12 / months, occ, `${freq}: 12/${months} should equal ${occ}`);
+  }
 });
