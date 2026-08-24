@@ -44,6 +44,14 @@ function monthlyCost(sub) {
   return months ? amt / months : amt;
 }
 
+function monthlyNet(sub) {
+  const gross = monthlyCost(sub);
+  if (!sub.billed_to) return gross;
+  const subsidy = sub.subsidized_amount != null ? sub.subsidized_amount : (sub.amount || 0);
+  const subsidyMonthly = monthlyCost({ ...sub, amount: subsidy });
+  return Math.max(0, gross - subsidyMonthly);
+}
+
 function monthlySubsidy(sub) {
   if (!sub.billed_to) return 0;
   const amt = sub.subsidized_amount != null ? sub.subsidized_amount : (sub.amount || 0);
@@ -333,7 +341,7 @@ function subRowHTML(s) {
       <td class="num editable-cell" data-subsidy-amt-id="${s.id}">${s.billed_to && s.subsidized_amount != null ? fmtMoney(s.subsidized_amount) : s.billed_to ? '<span class="muted">Full</span>' : '—'}</td>
       <td>${fmtMoney(s.amount)}</td>
       <td>${FREQ_LABELS[s.frequency] || s.frequency}</td>
-      <td>${fmtMoney(monthlyCost(s))}</td>
+      <td>${fmtMoney(monthlyNet(s))}</td>
       <td>${renewalCell}</td>
       <td class="status-cell" data-status-sub-id="${s.id}">${statusPill(s.status)}</td>
       <td class="note-cell" data-note-sub-id="${s.id}" title="${escapeAttr(s.notes || '')}">${truncate(s.notes || '', 32)}</td>
@@ -700,6 +708,7 @@ function openSubForm(existing) {
           </select>
         </label>
         <label class="field"><span>Subsidized by</span><input id="f-billed" value="${escapeAttr(s.billed_to || '')}" placeholder="e.g. Amex Platinum streaming credit"/></label>
+        <label class="field"><span>Subsidy amount ($)</span><input id="f-subsidy-amt" type="number" step="0.01" min="0" value="${s.subsidized_amount ?? ''}" placeholder="Blank = full amount"/></label>
         <label class="field"><span>Amount ($)</span><input id="f-amount" type="number" step="0.01" value="${s.amount ?? 0}"/></label>
         <label class="field"><span>Frequency</span>
           <select id="f-freq">
@@ -728,11 +737,13 @@ function openSubForm(existing) {
   el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
   closeOnEscape(el);
   el.querySelector('#f-save').onclick = () => {
+    const subsidyRaw = el.querySelector('#f-subsidy-amt').value.trim();
     const patch = {
       name: el.querySelector('#f-name').value.trim(),
       who: el.querySelector('#f-who-in').value,
       category: el.querySelector('#f-cat').value,
       billed_to: el.querySelector('#f-billed').value.trim(),
+      subsidized_amount: subsidyRaw === '' ? null : Number(subsidyRaw),
       amount: Number(el.querySelector('#f-amount').value) || 0,
       frequency: el.querySelector('#f-freq').value,
       next_renewal: el.querySelector('#f-renewal').value || null,

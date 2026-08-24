@@ -23,6 +23,14 @@ function monthlyCost(sub) {
   return months ? amt / months : amt;
 }
 
+function monthlyNet(sub) {
+  const gross = monthlyCost(sub);
+  if (!sub.billed_to) return gross;
+  const subsidy = sub.subsidized_amount != null ? sub.subsidized_amount : (sub.amount || 0);
+  const subsidyMonthly = monthlyCost({ ...sub, amount: subsidy });
+  return Math.max(0, gross - subsidyMonthly);
+}
+
 function monthlySubsidy(sub) {
   if (!sub.billed_to) return 0;
   const amt = sub.subsidized_amount != null ? sub.subsidized_amount : (sub.amount || 0);
@@ -122,7 +130,7 @@ function subCardHTML(sub) {
         </div>
         <div>
           <div class="m-card-amount">${fmtMoney(sub.amount)}</div>
-          <div class="m-card-amount-sub">${fmtMoneyShort(monthlyCost(sub))}/mo</div>
+          <div class="m-card-amount-sub">${fmtMoneyShort(monthlyNet(sub))}/mo</div>
         </div>
       </div>
       <div class="m-card-footer">
