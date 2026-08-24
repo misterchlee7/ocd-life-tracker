@@ -101,6 +101,14 @@ function render({ data, loading }) {
   const subsidizedMonthly = subsidizedSubs.reduce((a, s) => a + monthlySubsidy(s), 0);
   const netMonthly = grossMonthly - subsidizedMonthly;
 
+  const catBreakdown = {};
+  for (const s of active) {
+    const cat = s.category || 'other';
+    if (!catBreakdown[cat]) catBreakdown[cat] = { count: 0, net: 0 };
+    catBreakdown[cat].count++;
+    catBreakdown[cat].net += monthlyNet(s);
+  }
+
   // upcoming30: non-monthly only — monthly subs always renew, so they'd make this noisy
   // non_renewing excluded: no charge is coming
   const upcoming30 = active.filter(s => {
@@ -118,7 +126,7 @@ function render({ data, loading }) {
   page.innerHTML = `
     ${pageHeaderHTML('Subscriptions', `${active.length} active`,
       `<button class="btn primary" id="btn-add">+ Add subscription</button>`)}
-    ${summaryHTML({ count: active.length, grossMonthly, subsidizedMonthly, subsidizedCount: subsidizedSubs.length, netMonthly, upcoming30, trialsExpiring })}
+    ${summaryHTML({ count: active.length, grossMonthly, subsidizedMonthly, subsidizedCount: subsidizedSubs.length, netMonthly, upcoming30, trialsExpiring, catBreakdown })}
     ${trialsExpiring.length ? trialBannerHTML(trialsExpiring) : ''}
     ${filtersHTML()}
     ${!hasNonMonthly && !hasMonthly
@@ -132,9 +140,14 @@ function render({ data, loading }) {
   wireInteractions();
 }
 
-function summaryHTML({ count, grossMonthly, subsidizedMonthly, subsidizedCount, netMonthly, upcoming30, trialsExpiring }) {
+function summaryHTML({ count, grossMonthly, subsidizedMonthly, subsidizedCount, netMonthly, upcoming30, trialsExpiring, catBreakdown }) {
   const upcomingTotal = upcoming30.reduce((a, s) => a + (s.amount || 0), 0);
   const hasSubsidies = subsidizedMonthly > 0;
+  const catRows = Object.entries(catBreakdown)
+    .sort((a, b) => b[1].net - a[1].net)
+    .map(([cat, { count: n, net }]) =>
+      `<div class="cat-row"><span class="cat-name">${CAT_LABELS[cat] || cat}</span><span class="cat-count">${n}</span><span class="cat-amt">${fmtMoneyShort(net)}</span></div>`
+    ).join('');
   return `
     <div class="summary summary-3">
       <div class="card">
@@ -147,6 +160,7 @@ function summaryHTML({ count, grossMonthly, subsidizedMonthly, subsidizedCount, 
         <div class="value">${fmtMoney(netMonthly)}</div>
         <div class="sub">${fmtMoneyShort(netMonthly * 12)}/yr out of pocket</div>
         ${hasSubsidies ? `<div class="sub">${fmtMoneyShort(grossMonthly)} gross − ${fmtMoneyShort(subsidizedMonthly)} perks (${subsidizedCount})</div>` : ''}
+        ${catRows ? `<div class="cat-breakdown">${catRows}</div>` : ''}
       </div>
       <div class="card">
         <div class="label">Non-monthly ≤ 30d</div>

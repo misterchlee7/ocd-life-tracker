@@ -40,7 +40,7 @@ bill_type:  "cc" | "loan" | "utility" | "insurance" | "fee" | "investment" | "gi
 bill_status (per-period): "unpaid" | "scheduled" | "needs_confirm" | "paid" | "auto" | "skipped"
 perk_status (per-period): "available" | "claimed" | "skipped" | "expired"
 sub_status: "active" | "trial" | "paused" | "non_renewing" | "cancelled"
-sub_category: "streaming" | "music" | "software" | "fitness" | "news" | "storage" | "gaming" | "shopping" | "cc_annual_fee" | "other"
+sub_category: "entertainment" | "software" | "shopping_delivery" | "finance" | "security" | "auto" | "other"
 warranty_category: "electronics" | "appliance" | "vehicle" | "furniture" | "tool" | "outdoor" | "clothing" | "other"
 account_type:   "checking" | "savings" | "brokerage" | "retirement" | "hsa" | "cd" | "other"
 account_status: "open" | "closed"

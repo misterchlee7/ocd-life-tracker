@@ -56,11 +56,13 @@ export const PERK_STATUS_LABELS = {
 
 // ---------- subscriptions ----------
 
-export const SUB_CATEGORIES = ['streaming', 'music', 'software', 'fitness', 'news', 'storage', 'gaming', 'shopping', 'cc_annual_fee', 'other'];
+export const SUB_CATEGORIES = ['entertainment', 'software', 'shopping_delivery', 'finance', 'security', 'auto', 'other'];
 export const SUB_CAT_LABELS = {
-  streaming: 'Streaming', music: 'Music', software: 'Software', fitness: 'Fitness',
-  news: 'News', storage: 'Storage', gaming: 'Gaming', shopping: 'Shopping',
-  cc_annual_fee: 'CC Annual Fee', other: 'Other',
+  entertainment: 'Entertainment', software: 'Software', shopping_delivery: 'Shopping & Delivery',
+  finance: 'Finance', security: 'Security', auto: 'Auto', other: 'Other',
+  // legacy keys — display-only until re-categorized
+  streaming: 'Streaming', music: 'Music', fitness: 'Fitness', news: 'News',
+  storage: 'Storage', gaming: 'Gaming', shopping: 'Shopping', cc_annual_fee: 'CC Annual Fee',
 };
 export const SUB_STATUSES = ['active', 'trial', 'paused', 'non_renewing', 'cancelled'];
 export const SUB_STATUS_LABELS = { active: 'Active', trial: 'Trial', paused: 'Paused', non_renewing: 'Non-renewing', cancelled: 'Cancelled' };
