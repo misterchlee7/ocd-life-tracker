@@ -398,10 +398,12 @@ th.sorted .sort-icon { color: var(--accent); }
 .cat-breakdown {
   margin-top: 6px; padding-top: 6px;
   border-top: 1px solid light-dark(rgba(0,0,0,.08), rgba(255,255,255,.08));
+  columns: 2; column-gap: 16px;
 }
 .cat-row {
   display: flex; align-items: baseline; gap: 4px;
   font-size: 11.5px; line-height: 1.6;
+  break-inside: avoid;
 }
 .cat-name { flex: 1; color: var(--text-muted); }
 .cat-count { color: var(--text-faint); font-size: 10.5px; min-width: 16px; text-align: right; }
