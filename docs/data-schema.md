@@ -36,7 +36,7 @@ Canonical shape of `data.json` stored in the `ocd-life-tracker-data` repo. This 
 ```
 who:        "chang" | "kiju" | "joint"
 frequency:  "monthly" | "bimonthly" | "quarterly" | "biannual" | "semi_annual" | "annual" | "biennial" | "triennial" | "quinquennial" | "one_time" | "variable"
-bill_type:  "cc" | "loan" | "utility" | "insurance" | "fee" | "investment" | "gift" | "other"
+bill_type:  "cc" | "loan" | "utility" | "insurance" | "tax" | "fee" | "investment" | "gift" | "other"
 bill_status (per-period): "unpaid" | "scheduled" | "needs_confirm" | "paid" | "auto" | "skipped"
 perk_status (per-period): "available" | "claimed" | "skipped" | "expired"
 sub_status: "active" | "trial" | "paused" | "non_renewing" | "cancelled"

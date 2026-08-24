@@ -39,9 +39,9 @@ export const BILL_STATUS_LABELS = {
   not_due: 'Not due',
 };
 
-export const BILL_TYPES = ['cc', 'loan', 'utility', 'insurance', 'fee', 'investment', 'gift', 'other'];
+export const BILL_TYPES = ['cc', 'loan', 'utility', 'insurance', 'tax', 'fee', 'investment', 'gift', 'other'];
 export const BILL_TYPE_LABELS = {
-  cc: 'CC', loan: 'Loan', utility: 'Utility', insurance: 'Insurance',
+  cc: 'CC', loan: 'Loan', utility: 'Utility', insurance: 'Insurance', tax: 'Tax',
   fee: 'Fee', investment: 'Investment', gift: 'Gift', other: 'Other',
 };
 
