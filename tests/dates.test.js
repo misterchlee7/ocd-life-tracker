@@ -9,7 +9,7 @@ import {
 import {
   yearProgress, statusForRow, cadenceAnchorMonth, rotation, getAttentionItems,
   dueMonthInfo, billStatusDisplay, snapshotAt, balanceSeries, seriesDelta,
-  warrantyStatus,
+  warrantyStatus, subMonthlyCost, subMonthlyNet, subMonthlySubsidy,
 } from '../js/core/derive.js';
 
 // ---------- periodFor ----------
@@ -563,5 +563,64 @@ test('monthsPerCycle: consistent with occurrencesPerYear', () => {
     const months = monthsPerCycle(freq);
     const occ = occurrencesPerYear(freq);
     assert.equal(12 / months, occ, `${freq}: 12/${months} should equal ${occ}`);
+  }
+});
+
+// ---------- subMonthlyCost / subMonthlyNet / subMonthlySubsidy ----------
+
+test('subMonthlyCost: monthly returns amount, annual divides by 12', () => {
+  assert.equal(subMonthlyCost({ amount: 15, frequency: 'monthly' }), 15);
+  assert.equal(subMonthlyCost({ amount: 120, frequency: 'annual' }), 10);
+  assert.equal(subMonthlyCost({ amount: 120, frequency: 'quarterly' }), 40);
+});
+
+test('subMonthlyNet: no subsidy returns gross', () => {
+  const sub = { amount: 99, frequency: 'annual', billed_to: '' };
+  assert.equal(subMonthlyNet(sub), 99 / 12);
+  assert.equal(subMonthlyNet({ ...sub, billed_to: null }), 99 / 12);
+});
+
+test('subMonthlyNet: fully subsidized (subsidized_amount null) returns 0', () => {
+  const sub = { amount: 99, frequency: 'annual', billed_to: 'Amex Gold', subsidized_amount: null };
+  assert.equal(subMonthlyNet(sub), 0);
+});
+
+test('subMonthlyNet: partial subsidy subtracts correctly', () => {
+  const sub = { amount: 120, frequency: 'annual', billed_to: 'Amex', subsidized_amount: 60 };
+  assert.equal(subMonthlyNet(sub), 5); // (120 - 60) / 12
+});
+
+test('subMonthlyNet: monthly partial subsidy', () => {
+  const sub = { amount: 20, frequency: 'monthly', billed_to: 'Card', subsidized_amount: 8 };
+  assert.equal(subMonthlyNet(sub), 12); // 20 - 8
+});
+
+test('subMonthlyNet: over-subsidized floors at 0', () => {
+  const sub = { amount: 50, frequency: 'monthly', billed_to: 'Card', subsidized_amount: 75 };
+  assert.equal(subMonthlyNet(sub), 0);
+});
+
+test('subMonthlySubsidy: no billed_to returns 0', () => {
+  assert.equal(subMonthlySubsidy({ amount: 99, frequency: 'annual' }), 0);
+  assert.equal(subMonthlySubsidy({ amount: 99, frequency: 'annual', billed_to: '' }), 0);
+});
+
+test('subMonthlySubsidy: fully subsidized returns full monthly cost', () => {
+  const sub = { amount: 120, frequency: 'annual', billed_to: 'Perk', subsidized_amount: null };
+  assert.equal(subMonthlySubsidy(sub), 10); // 120 / 12
+});
+
+test('subMonthlySubsidy: partial subsidy returns subsidy monthly', () => {
+  const sub = { amount: 120, frequency: 'annual', billed_to: 'Perk', subsidized_amount: 60 };
+  assert.equal(subMonthlySubsidy(sub), 5); // 60 / 12
+});
+
+test('subMonthlyNet + subMonthlySubsidy = subMonthlyCost for valid subsidies', () => {
+  for (const freq of ['monthly', 'quarterly', 'annual', 'biennial']) {
+    const sub = { amount: 240, frequency: freq, billed_to: 'Card', subsidized_amount: 100 };
+    const net = subMonthlyNet(sub);
+    const subsidy = subMonthlySubsidy(sub);
+    const gross = subMonthlyCost(sub);
+    assert.ok(Math.abs(net + subsidy - gross) < 1e-10, `${freq}: net + subsidy should equal gross`);
   }
 });

@@ -3,7 +3,7 @@
 //
 // Kept intentionally sparse for now — will grow as pages are implemented.
 
-import { periodFor, nextOccurrence, todayISO, daysFromToday } from './dates.js';
+import { periodFor, nextOccurrence, todayISO, daysFromToday, monthsPerCycle } from './dates.js';
 import { BILL_STATUS_LABELS } from './text.js';
 
 // All PaymentRecords for a given bill, sorted newest-first.
@@ -407,4 +407,26 @@ export function seriesDelta(points) {
     delta: end - start,
     pct: start !== 0 ? ((end - start) / start) * 100 : null,
   };
+}
+
+// Subscription cost helpers
+
+export function subMonthlyCost(sub) {
+  const amt = sub.amount || 0;
+  const months = monthsPerCycle(sub.frequency);
+  return months ? amt / months : amt;
+}
+
+export function subMonthlyNet(sub) {
+  const gross = subMonthlyCost(sub);
+  if (!sub.billed_to) return gross;
+  const subsidy = sub.subsidized_amount != null ? sub.subsidized_amount : (sub.amount || 0);
+  const subsidyMonthly = subMonthlyCost({ ...sub, amount: subsidy });
+  return Math.max(0, gross - subsidyMonthly);
+}
+
+export function subMonthlySubsidy(sub) {
+  if (!sub.billed_to) return 0;
+  const amt = sub.subsidized_amount != null ? sub.subsidized_amount : (sub.amount || 0);
+  return subMonthlyCost({ ...sub, amount: amt });
 }

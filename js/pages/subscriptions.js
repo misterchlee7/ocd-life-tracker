@@ -1,6 +1,7 @@
 import { state, uid } from '../core/state.js';
 import { bootstrap, isMobile, whoPill, fmtMoney, fmtMoneyShort, toast, WHO_LABEL, positionMenu, confirmModal, closeOnEscape, icon, pageHeaderHTML } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday, monthsPerCycle } from '../core/dates.js';
+import { subMonthlyCost as monthlyCost, subMonthlyNet as monthlyNet, subMonthlySubsidy as monthlySubsidy } from '../core/derive.js';
 import {
   escapeHTML, escapeAttr, truncate, FREQ_LABELS,
   SUB_CATEGORIES as CATEGORIES, SUB_CAT_LABELS as CAT_LABELS,
@@ -38,25 +39,7 @@ function computedRenewal(sub) {
   return d.toISOString().slice(0, 10);
 }
 
-function monthlyCost(sub) {
-  const amt = sub.amount || 0;
-  const months = monthsPerCycle(sub.frequency);
-  return months ? amt / months : amt;
-}
 
-function monthlyNet(sub) {
-  const gross = monthlyCost(sub);
-  if (!sub.billed_to) return gross;
-  const subsidy = sub.subsidized_amount != null ? sub.subsidized_amount : (sub.amount || 0);
-  const subsidyMonthly = monthlyCost({ ...sub, amount: subsidy });
-  return Math.max(0, gross - subsidyMonthly);
-}
-
-function monthlySubsidy(sub) {
-  if (!sub.billed_to) return 0;
-  const amt = sub.subsidized_amount != null ? sub.subsidized_amount : (sub.amount || 0);
-  return monthlyCost({ ...sub, amount: amt });
-}
 
 function filterSubs(data) {
   const q = ui.search.trim().toLowerCase();
