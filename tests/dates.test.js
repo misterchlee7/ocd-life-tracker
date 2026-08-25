@@ -8,7 +8,8 @@ import {
 } from '../js/core/dates.js';
 import {
   yearProgress, statusForRow, cadenceAnchorMonth, rotation, getAttentionItems,
-  dueMonthInfo, billStatusDisplay, snapshotAt, balanceSeries, seriesDelta,
+  dueMonthInfo, billStatusDisplay, latestSnapshot, applySnapshot,
+  snapshotAt, balanceSeries, seriesDelta,
   warrantyStatus, subMonthlyCost, subMonthlyNet, subMonthlySubsidy,
 } from '../js/core/derive.js';
 
@@ -423,9 +424,69 @@ test('attention: cancelled sub past end date produces nothing', () => {
   assert.equal(items.filter(i => i.kind.startsWith('sub_')).length, 0);
 });
 
-// ---------- account balance series (accounts trend chart) ----------
+// ---------- account snapshot helpers ----------
 
 const acct = (snaps) => ({ snapshots: snaps });
+
+test('latestSnapshot: returns most recent by date', () => {
+  const a = acct([{ date: '2026-01-10', balance: 100 }, { date: '2026-03-05', balance: 120 }]);
+  assert.equal(latestSnapshot(a).balance, 120);
+  assert.equal(latestSnapshot(a).date, '2026-03-05');
+});
+
+test('latestSnapshot: null for empty or missing snapshots', () => {
+  assert.equal(latestSnapshot(acct([])), null);
+  assert.equal(latestSnapshot({}), null);
+});
+
+test('latestSnapshot: tolerates unsorted snapshots', () => {
+  const a = acct([{ date: '2026-03-05', balance: 120 }, { date: '2026-01-10', balance: 100 }]);
+  assert.equal(latestSnapshot(a).balance, 120);
+});
+
+test('latestSnapshot: single snapshot', () => {
+  const a = acct([{ date: '2026-06-01', balance: 42 }]);
+  assert.deepEqual(latestSnapshot(a), { date: '2026-06-01', balance: 42 });
+});
+
+test('applySnapshot: adds new snapshot and sorts', () => {
+  const item = { snapshots: [{ date: '2026-01-01', balance: 100 }] };
+  applySnapshot(item, '2026-02-01', 200);
+  assert.equal(item.snapshots.length, 2);
+  assert.equal(item.snapshots[1].balance, 200);
+  assert.equal(item.snapshots[1].date, '2026-02-01');
+});
+
+test('applySnapshot: same-day replaces balance', () => {
+  const item = { snapshots: [{ date: '2026-01-01', balance: 100 }] };
+  applySnapshot(item, '2026-01-01', 999);
+  assert.equal(item.snapshots.length, 1);
+  assert.equal(item.snapshots[0].balance, 999);
+});
+
+test('applySnapshot: creates snapshots array if missing', () => {
+  const item = {};
+  applySnapshot(item, '2026-03-15', 50);
+  assert.equal(item.snapshots.length, 1);
+  assert.deepEqual(item.snapshots[0], { date: '2026-03-15', balance: 50 });
+});
+
+test('applySnapshot: maintains sort order after insert', () => {
+  const item = { snapshots: [
+    { date: '2026-01-01', balance: 100 },
+    { date: '2026-06-01', balance: 300 },
+  ]};
+  applySnapshot(item, '2026-03-01', 200);
+  assert.deepEqual(item.snapshots.map(s => s.date), ['2026-01-01', '2026-03-01', '2026-06-01']);
+});
+
+test('applySnapshot: zero balance snapshot', () => {
+  const item = { snapshots: [{ date: '2026-01-01', balance: 5000 }] };
+  applySnapshot(item, '2026-02-01', 0);
+  assert.equal(item.snapshots[1].balance, 0);
+});
+
+// ---------- account balance series (accounts trend chart) ----------
 
 test('snapshotAt: most recent on or before date', () => {
   const a = acct([{ date: '2026-01-10', balance: 100 }, { date: '2026-03-05', balance: 120 }]);

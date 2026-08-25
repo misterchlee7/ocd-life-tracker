@@ -1,17 +1,12 @@
 import { state } from '../core/state.js';
 import { bootstrap, whoPill, fmtMoneyShort } from '../core/ui.js';
 import { shortDate, relativeDays } from '../core/dates.js';
+import { latestSnapshot } from '../core/derive.js';
 import { escapeHTML, ACCOUNT_TYPE_LABELS as TYPE_LABELS } from '../core/text.js';
 
 const page = document.getElementById('page');
 
 function accounts(data) { return data.accounts || []; }
-
-function latestSnapshot(a) {
-  const snaps = a.snapshots || [];
-  if (!snaps.length) return null;
-  return [...snaps].sort((x, y) => x.date.localeCompare(y.date))[snaps.length - 1];
-}
 
 // ---------- HTML builders ----------
 
@@ -23,6 +18,14 @@ function summaryStripHTML(open) {
     .reduce((s, x) => s + x.snap.balance, 0);
   const nonRetirementTotal = total - retirementTotal;
   const best = open.filter(a => a.apy != null).sort((a, b) => b.apy - a.apy)[0];
+  const snapDates = snapped.map(x => x.snap.date).sort();
+  const newest = snapDates[snapDates.length - 1];
+  const oldest = snapDates[0];
+  const snapSub = snapped.length
+    ? oldest === newest
+      ? `${snapped.length}/${open.length} · ${relativeDays(newest)}`
+      : `${snapped.length}/${open.length} · ${relativeDays(newest)} · oldest ${relativeDays(oldest)}`
+    : 'none yet';
 
   return `
     <div class="m-summary-strip">
@@ -33,7 +36,7 @@ function summaryStripHTML(open) {
       <div class="m-summary-card">
         <div class="label">Snapshot total</div>
         <div class="value" style="font-size:13px">${snapped.length ? fmtMoneyShort(total) : '—'}</div>
-        <div class="sub">${snapped.length ? `${snapped.length}/${open.length} accounts` : 'none yet'}</div>
+        <div class="sub">${snapSub}</div>
         ${snapped.length ? `<div class="sub">Ret ${fmtMoneyShort(retirementTotal)} · Non-ret ${fmtMoneyShort(nonRetirementTotal)}</div>` : ''}
       </div>
       <div class="m-summary-card">

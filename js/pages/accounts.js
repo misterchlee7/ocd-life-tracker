@@ -1,7 +1,7 @@
 import { state, uid } from '../core/state.js';
 import { bootstrap, isMobile, whoPill, toast, positionMenu, confirmModal, amountModal, closeOnEscape, pageHeaderHTML, fmtMoney, fmtMoneyShort } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays } from '../core/dates.js';
-import { balanceSeries, seriesDelta } from '../core/derive.js';
+import { latestSnapshot, applySnapshot, balanceSeries, seriesDelta } from '../core/derive.js';
 import {
   escapeHTML, escapeAttr, truncate,
   ACCOUNT_TYPES as TYPES, ACCOUNT_TYPE_LABELS as TYPE_LABELS,
@@ -28,14 +28,6 @@ function accounts(data) {
 
 function accountLabel(a) {
   return `${a.institution} — ${a.name}`;
-}
-
-// Latest snapshot by date, or null. Snapshots are kept ascending, but sort
-// defensively in case of hand-edited data.
-function latestSnapshot(a) {
-  const snaps = a.snapshots || [];
-  if (!snaps.length) return null;
-  return [...snaps].sort((x, y) => x.date.localeCompare(y.date))[snaps.length - 1];
 }
 
 function filterAccounts(data) {
@@ -109,10 +101,14 @@ function summaryHTML({ open, closed }) {
 
   const snapped = open.map(a => ({ a, snap: latestSnapshot(a) })).filter(x => x.snap);
   const total = snapped.reduce((s, x) => s + x.snap.balance, 0);
-  const oldest = snapped.map(x => x.snap.date).sort()[0];
+  const dates = snapped.map(x => x.snap.date).sort();
+  const oldest = dates[0];
+  const newest = dates[dates.length - 1];
   const totalLabel = snapped.length ? fmtMoney(total) : '—';
   const totalSub = snapped.length
-    ? `${snapped.length}/${open.length} accounts · oldest ${relativeDays(oldest)}`
+    ? oldest === newest
+      ? `${snapped.length}/${open.length} accounts · ${relativeDays(newest)}`
+      : `${snapped.length}/${open.length} accounts · updated ${relativeDays(newest)} · oldest ${relativeDays(oldest)}`
     : 'no balance snapshots yet';
 
   const retirementTotal = snapped
@@ -715,16 +711,6 @@ function handleMenuAction(id, act) {
     }
     case 'delete': confirmDelete(id); break;
   }
-}
-
-// One snapshot per date: re-snapshotting today replaces today's entry.
-// Mutation body shared by the single and bulk snapshot flows.
-function applySnapshot(item, dateISO, amt) {
-  if (!item.snapshots) item.snapshots = [];
-  const existing = item.snapshots.find(s => s.date === dateISO);
-  if (existing) existing.balance = amt;
-  else item.snapshots.push({ date: dateISO, balance: amt });
-  item.snapshots.sort((x, y) => x.date.localeCompare(y.date));
 }
 
 function openSnapshotModal(a) {

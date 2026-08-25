@@ -352,6 +352,25 @@ export function getAttentionItems(data) {
   return items;
 }
 
+// ---------- account snapshot helpers ----------
+
+// Latest snapshot by date, or null. Snapshots are kept ascending, but sort
+// defensively in case of hand-edited data.
+export function latestSnapshot(a) {
+  const snaps = a.snapshots || [];
+  if (!snaps.length) return null;
+  return [...snaps].sort((x, y) => x.date.localeCompare(y.date))[snaps.length - 1];
+}
+
+// One snapshot per date: re-snapshotting today replaces today's entry.
+export function applySnapshot(item, dateISO, amt) {
+  if (!item.snapshots) item.snapshots = [];
+  const existing = item.snapshots.find(s => s.date === dateISO);
+  if (existing) existing.balance = amt;
+  else item.snapshots.push({ date: dateISO, balance: amt });
+  item.snapshots.sort((x, y) => x.date.localeCompare(y.date));
+}
+
 // ---------- account balance series (accounts tab trend chart) ----------
 
 // Most recent snapshot on or before dateISO, or null. Snapshots are kept
