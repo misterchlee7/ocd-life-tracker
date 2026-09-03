@@ -428,6 +428,43 @@ export function seriesDelta(points) {
   };
 }
 
+// ---------- vesting helpers ----------
+
+// Gross value for a vesting event. Sold/pending events use the stored value;
+// upcoming/vested events auto-compute from live stock price when available.
+export function computedGrossValue(v, data) {
+  if (v.status === 'sold' || v.status === 'pending_settlement') return v.gross_value;
+  const grant = (data.grants || []).find(g => g.id === v.grant_id);
+  const ticker = grant?.ticker?.toUpperCase();
+  const price = ticker ? (data.stock_prices || {})[ticker] : null;
+  if (price != null && v.shares != null) return v.shares * price;
+  return v.gross_value;
+}
+
+// Whether the gross value is auto-computed from live stock price (not manually set).
+export function isAutoValue(v, data) {
+  if (v.status === 'sold' || v.status === 'pending_settlement') return false;
+  const grant = (data.grants || []).find(g => g.id === v.grant_id);
+  const ticker = grant?.ticker?.toUpperCase();
+  const price = ticker ? (data.stock_prices || {})[ticker] : null;
+  return price != null && v.shares != null;
+}
+
+// Net shares after tax withholding; null when shares_withheld is not set.
+export function netShares(v) {
+  if (v.shares == null || v.shares_withheld == null) return null;
+  return v.shares - v.shares_withheld;
+}
+
+// Net value after tax withholding; null when shares_withheld is not set.
+export function netValue(v, data) {
+  const net = netShares(v);
+  if (net == null) return null;
+  const gross = computedGrossValue(v, data);
+  if (gross == null || v.shares == null || v.shares === 0) return null;
+  return (gross / v.shares) * net;
+}
+
 // Subscription cost helpers
 
 export function subMonthlyCost(sub) {

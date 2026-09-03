@@ -209,6 +209,7 @@ One per period per perk, tracking status.
   "who": "chang",
   "date": "2026-05-10",
   "shares": 50,                      // optional
+  "shares_withheld": 12,             // optional; shares withheld for tax. Net shares = shares − shares_withheld.
   "gross_value": 12551.97,           // stored value; auto-computed as shares × stock_prices[grant.ticker] for upcoming/vested when ticker is set. Sold/pending_settlement always use the stored value (historical).
   "status": "upcoming",              // vest_status enum
   "sold_date": null,

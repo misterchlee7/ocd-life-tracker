@@ -816,6 +816,9 @@ tr.row-selected td { background: var(--hover-accent); }
 .row-flex { display: flex; align-items: center; gap: 8px; }
 .spacer { flex: 1; }
 .cell-amount-sub { font-size: 11px; color: var(--text-muted); }
+td > .cell-amount-sub { display: block; }
+.cell-amount-sub-add::after { content: '+tax'; opacity: 0; font-size: 10px; }
+td:hover .cell-amount-sub-add::after { opacity: 0.4; }
 .period-range { margin-top: 2px; }
 .renewal-due   { color: var(--red-fg); font-weight: 600; }
 .renewal-due   .cell-amount-sub { color: var(--red-fg); opacity: 0.8; }

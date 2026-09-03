@@ -5,6 +5,7 @@ import {
   escapeHTML, escapeAttr,
   GRANT_TYPES, GRANT_TYPE_LABELS, VEST_STATUSES, VEST_STATUS_LABELS,
 } from '../core/text.js';
+import { computedGrossValue, isAutoValue, netShares, netValue } from '../core/derive.js';
 
 const page = document.getElementById('page');
 
@@ -24,23 +25,6 @@ function grantLabel(g) {
   if (!g) return '—';
   const parts = [g.company, g.broker].filter(Boolean);
   return parts.length ? parts.join(' · ') : (g.label || '—');
-}
-
-function computedGrossValue(v, data) {
-  if (v.status === 'sold' || v.status === 'pending_settlement') return v.gross_value;
-  const grant = data.grants.find(g => g.id === v.grant_id);
-  const ticker = grant?.ticker?.toUpperCase();
-  const price = ticker ? (data.stock_prices || {})[ticker] : null;
-  if (price != null && v.shares != null) return v.shares * price;
-  return v.gross_value;
-}
-
-function isAutoValue(v, data) {
-  if (v.status === 'sold' || v.status === 'pending_settlement') return false;
-  const grant = data.grants.find(g => g.id === v.grant_id);
-  const ticker = grant?.ticker?.toUpperCase();
-  const price = ticker ? (data.stock_prices || {})[ticker] : null;
-  return price != null && v.shares != null;
 }
 
 function filterEvents(data) {
@@ -273,8 +257,8 @@ function eventRowHTML(data, v) {
       <td class="note-cell" data-broker-grant-id="${grant?.id || ''}" title="${escapeAttr(grant?.broker || '')}">${escapeHTML(grant?.broker || '—')}</td>
       <td class="status-cell" data-type-event-id="${v.id}">${GRANT_TYPE_LABELS[v.type] || v.type}</td>
       <td class="status-cell" data-who-event-id="${v.id}">${whoPill(v.who)}</td>
-      <td class="editable-cell" data-shares-event-id="${v.id}">${v.shares ?? '—'}</td>
-      <td class="${isAutoValue(v, data) ? '' : 'editable-cell'}" data-value-event-id="${v.id}" title="${isAutoValue(v, data) ? 'Computed from stock price × shares' : 'Click to edit'}">${fmtMoney(computedGrossValue(v, data))}</td>
+      <td class="editable-cell" data-shares-event-id="${v.id}">${v.shares ?? '—'}${v.shares_withheld ? `<span class="cell-amount-sub" data-withheld-event-id="${v.id}">−${v.shares_withheld} tax → ${netShares(v)} net</span>` : `<span class="cell-amount-sub cell-amount-sub-add" data-withheld-event-id="${v.id}" title="Click to add shares withheld for taxes"></span>`}</td>
+      <td class="${isAutoValue(v, data) ? '' : 'editable-cell'}" data-value-event-id="${v.id}" title="${isAutoValue(v, data) ? 'Computed from stock price × shares' : 'Click to edit'}">${fmtMoney(computedGrossValue(v, data))}${netValue(v, data) != null ? `<span class="cell-amount-sub">${fmtMoney(netValue(v, data))} net</span>` : ''}</td>
       <td class="num">${v.shares ? fmtMoney(computedGrossValue(v, data) / v.shares) : '—'}</td>
       <td>${vestStatusPill(v.status)}</td>
       <td>${proceedsCell}</td>
@@ -560,6 +544,21 @@ function wireInteractions(data) {
     });
   });
 
+  // Shares withheld for taxes
+  page.querySelectorAll('[data-withheld-event-id]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = el.dataset.withheldEventId;
+      const v = state.get().data?.vesting.find(x => x.id === id);
+      if (!v) return;
+      const td = el.closest('td');
+      inlineNumber(td, v.shares_withheld, val => {
+        if (val !== v.shares_withheld) state.mutate(d => { const ev = d.vesting.find(x => x.id === id); if (ev) ev.shares_withheld = val; }, `edit withheld: ${v.date ? shortDate(v.date) : 'event'} → ${val}`);
+        else render(state.get());
+      });
+    });
+  });
+
   // Gross value (only editable when not auto-computed from stock price)
   page.querySelectorAll('td[data-value-event-id]').forEach(td => {
     td.addEventListener('click', () => {
@@ -621,21 +620,23 @@ function handleEventAction(id, act) {
       state.mutate(d => { const e = d.vesting.find(x => x.id === id); if (e) e.status = 'vested'; }, `mark vested: ${v.date ? shortDate(v.date) : 'event'}${v.shares ? ` (${v.shares} shares)` : ''}`);
       toast(`Vested: ${v.date ? shortDate(v.date) : 'event'}`, 'success');
       break;
-    case 'sold':
+    case 'sold': {
+      const currentGross = computedGrossValue(v, data);
       amountModal({
         title: 'Mark sold',
         sub: `Proceeds · ${v.date ? shortDate(v.date) : 'event'}`,
-        defaultValue: computedGrossValue(v, data) ?? 0,
+        defaultValue: currentGross ?? 0,
         confirmLabel: 'Mark sold',
         onConfirm: (n) => {
           state.mutate(d => {
             const e = d.vesting.find(x => x.id === id);
-            if (e) { e.status = 'sold'; e.sold_amount = n; e.sold_date = todayISO(); }
+            if (e) { e.status = 'sold'; e.sold_amount = n; e.sold_date = todayISO(); e.gross_value = currentGross; }
           }, `mark sold: ${v.date ? shortDate(v.date) : 'event'} $${n}`);
           toast(`Sold: ${v.date ? shortDate(v.date) : 'event'}`, 'success');
         },
       });
       break;
+    }
     case 'delete':
       confirmModal({
         title: 'Delete vesting event',
@@ -799,6 +800,7 @@ function openEventForm(existing) {
         </label>
         <label class="field"><span>Date</span><input id="f-date" type="date" value="${v.date || ''}"/></label>
         <label class="field"><span>Shares</span><input id="f-shares" type="number" step="1" value="${v.shares ?? ''}"/></label>
+        <label class="field"><span>Withheld for tax</span><input id="f-withheld" type="number" step="1" value="${v.shares_withheld ?? ''}" placeholder="0"/></label>
         <label class="field"><span>Gross value ($)</span><input id="f-value" type="number" step="0.01" value="${v.gross_value ?? 0}"/></label>
         <label class="field"><span>Status</span>
           <select id="f-status-in">
@@ -828,6 +830,7 @@ function openEventForm(existing) {
       who: el.querySelector('#f-who-in').value,
       date: el.querySelector('#f-date').value || null,
       shares: el.querySelector('#f-shares').value ? Number(el.querySelector('#f-shares').value) : null,
+      shares_withheld: el.querySelector('#f-withheld').value ? Number(el.querySelector('#f-withheld').value) : null,
       gross_value: Number(el.querySelector('#f-value').value) || 0,
       status: el.querySelector('#f-status-in').value,
       sold_date: el.querySelector('#f-sold-date').value || null,
