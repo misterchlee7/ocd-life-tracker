@@ -6,7 +6,7 @@ import {
   icon, pageHeaderHTML,
 } from '../core/ui.js';
 import { periodFor, todayISO, shortDate, daysFromToday, nextOccurrence, FREQUENCIES } from '../core/dates.js';
-import { paymentFor, yearProgress, rotation, needsConfirm, statusForRow, billStatusDisplay } from '../core/derive.js';
+import { paymentFor, yearProgress, rotation, needsConfirm, statusForRow, billStatusDisplay, tallyMonthMatches } from '../core/derive.js';
 import { schedulePending, recordPaid, recordSkip, setPaidAmount, markCardUsed, clearPayment } from '../core/actions.js';
 import {
   escapeHTML as escape, escapeAttr,
@@ -173,15 +173,12 @@ function summaryHTML(data) {
 
   for (const b of filtered) {
     const { status, payment } = statusForRow(data, b, ui.month);
-    if (payment && payment.pending_amount > 0 && status !== 'paid' && status !== 'skipped') {
+    if (payment && payment.pending_amount > 0 && status !== 'paid' && status !== 'skipped' &&
+        tallyMonthMatches(data, b, ui.month)) {
       pendingMonth += payment.pending_amount;
       pendingByWho[b.who] = (pendingByWho[b.who] || 0) + payment.pending_amount;
     }
-    // Use paid_date (not period status) to anchor to the viewed calendar month.
-    // Without this, an annual bill paid in January would appear in "Paid this month"
-    // for every subsequent month of the year since its period ('2026') stays 'paid'.
-    if (status === 'paid' && payment?.paid_amount != null &&
-        payment.paid_date?.slice(0, 7) === ui.month) {
+    if (status === 'paid' && payment?.paid_amount != null && tallyMonthMatches(data, b, ui.month)) {
       paidMonth += payment.paid_amount;
       paidByWho[b.who] = (paidByWho[b.who] || 0) + payment.paid_amount;
     }
@@ -963,7 +960,8 @@ function showBreakdownModal(data, type) {
   if (type === 'pending') {
     for (const b of filtered) {
       const { status, payment } = statusForRow(data, b, ui.month);
-      if (payment && payment.pending_amount > 0 && status !== 'paid' && status !== 'skipped') {
+      if (payment && payment.pending_amount > 0 && status !== 'paid' && status !== 'skipped' &&
+          tallyMonthMatches(data, b, ui.month)) {
         items.push({ name: `${b.brand ? b.brand + ' ' : ''}${b.name}`, amount: payment.pending_amount, who: b.who });
       }
     }
@@ -971,7 +969,7 @@ function showBreakdownModal(data, type) {
   } else {
     for (const b of filtered) {
       const { status, payment } = statusForRow(data, b, ui.month);
-      if (status === 'paid' && payment?.paid_amount != null && payment.paid_date?.slice(0, 7) === ui.month) {
+      if (status === 'paid' && payment?.paid_amount != null && tallyMonthMatches(data, b, ui.month)) {
         items.push({ name: `${b.brand ? b.brand + ' ' : ''}${b.name}`, amount: payment.paid_amount, who: b.who });
       }
     }

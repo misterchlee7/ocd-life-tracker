@@ -8,7 +8,7 @@ import {
   monthNavClass, monthNavLabelHTML, monthBannerHTML,
 } from '../core/ui.js';
 import { periodFor, todayISO } from '../core/dates.js';
-import { paymentFor, statusForRow, billStatusDisplay } from '../core/derive.js';
+import { paymentFor, statusForRow, billStatusDisplay, tallyMonthMatches } from '../core/derive.js';
 import { schedulePending, recordPaid, recordSkip, setPaidAmount, markCardUsed, clearPayment } from '../core/actions.js';
 import { escapeHTML as escape, BILL_TYPE_LABELS, FREQ_LABELS } from '../core/text.js';
 
@@ -52,11 +52,11 @@ function summaryStripHTML(data) {
 
   for (const b of active) {
     const { status, payment } = statusForRow(data, b, ui.month);
-    if (payment?.pending_amount > 0 && status !== 'paid' && status !== 'skipped') {
+    if (payment?.pending_amount > 0 && status !== 'paid' && status !== 'skipped' &&
+        tallyMonthMatches(data, b, ui.month)) {
       pending += payment.pending_amount;
     }
-    if (status === 'paid' && payment?.paid_amount != null &&
-        payment.paid_date?.slice(0, 7) === ui.month) {
+    if (status === 'paid' && payment?.paid_amount != null && tallyMonthMatches(data, b, ui.month)) {
       paid += payment.paid_amount;
     }
     if (status === 'needs_confirm') needsConfirm++;

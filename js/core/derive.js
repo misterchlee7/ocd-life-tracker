@@ -126,6 +126,23 @@ export function billStatusDisplay(data, bill, status, monthISO) {
   return { key: 'not_due', label: `${BILL_STATUS_LABELS.not_due} · ${MONTH_SHORT[info.dueMonthIdx]}` };
 }
 
+// Whether a bill's pending/paid amount for its current period should count toward
+// the "Pending/Paid this month" summary tallies for monthISO. Monthly (and
+// one_time/variable, which share the same y-mm period key) bills have a period
+// that already equals monthISO exactly, so they always match. Multi-month periods
+// (quarterly/semi-annual/annual/...) share ONE period across several calendar
+// months — without this, scheduling or paying at any point in the period would
+// tally into every month it spans. Anchored to the bill's own due month
+// (dueMonthInfo/cadenceAnchorMonth — the same "which month is this really for"
+// logic that drives the due/not-due pill), not to paid_date/scheduled_date, so
+// paying ahead of or behind the due month still credits the right month instead
+// of the month the click happened to land in.
+export function tallyMonthMatches(data, bill, monthISO) {
+  const info = dueMonthInfo(bill, monthISO, cadenceAnchorMonth(data, bill));
+  if (!info) return true;
+  return info.dueMonthIdx === Number(monthISO.slice(5, 7)) - 1;
+}
+
 // Derived warranty status. `claimed_date` (warranty used/redeemed) wins over
 // expiry — a fulfilled warranty is no longer valid whatever its expiry date says.
 export function warrantyStatus(w, todayStr = todayISO()) {

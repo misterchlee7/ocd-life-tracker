@@ -8,7 +8,7 @@ import {
 } from '../js/core/dates.js';
 import {
   yearProgress, statusForRow, cadenceAnchorMonth, rotation, getAttentionItems,
-  dueMonthInfo, billStatusDisplay, latestSnapshot, applySnapshot,
+  dueMonthInfo, billStatusDisplay, tallyMonthMatches, latestSnapshot, applySnapshot,
   snapshotAt, balanceSeries, seriesDelta,
   warrantyStatus, subMonthlyCost, subMonthlyNet, subMonthlySubsidy,
 } from '../js/core/derive.js';
@@ -360,6 +360,46 @@ test('billStatusDisplay: uses payment history to phase-align the due month', () 
   const bill = { id: 'b1', frequency: 'annual' };
   assert.deepEqual(billStatusDisplay(data, bill, 'unpaid', '2026-03'), { key: 'not_due', label: 'Not due · Jul' });
   assert.deepEqual(billStatusDisplay(data, bill, 'unpaid', '2026-08'), { key: 'due', label: 'Due' });
+});
+
+// ---------- derive: tallyMonthMatches ----------
+
+test('tallyMonthMatches: monthly bills always match (period already equals the viewed month)', () => {
+  const data = { payments: [] };
+  assert.equal(tallyMonthMatches(data, { id: 'b1', frequency: 'monthly' }, '2026-05'), true);
+  assert.equal(tallyMonthMatches(data, { id: 'b1', frequency: 'one_time' }, '2026-05'), true);
+  assert.equal(tallyMonthMatches(data, { id: 'b1', frequency: 'variable' }, '2026-05'), true);
+});
+
+test('tallyMonthMatches: non-monthly bill only matches its due month, not every month of the period', () => {
+  const data = { payments: [] }; // no history → fallback due month = Mar for Q1
+  const bill = { id: 'b1', frequency: 'quarterly' };
+  assert.equal(tallyMonthMatches(data, bill, '2026-01'), false);
+  assert.equal(tallyMonthMatches(data, bill, '2026-02'), false);
+  assert.equal(tallyMonthMatches(data, bill, '2026-03'), true);
+});
+
+test('tallyMonthMatches: paying ahead of the fallback due month re-anchors to when it was actually paid, consistently for every viewed month', () => {
+  // Quarterly bill, no prior history (fallback due month = Mar), paid early in Feb.
+  // cadenceAnchorMonth immediately phase-aligns to this payment (Feb) — the same
+  // rule billStatusDisplay already uses — so the tally lands on Feb, and lands
+  // there the same way whether you check it from a Jan, Feb, or Mar view. It's
+  // never lost, and it never depends on which month happened to be on screen
+  // when the payment was recorded (the old paid_date-vs-ui.month comparison did).
+  const data = { payments: [{ bill_id: 'b1', period: '2026-Q1', status: 'paid', paid_date: '2026-02-10' }] };
+  const bill = { id: 'b1', frequency: 'quarterly' };
+  assert.equal(tallyMonthMatches(data, bill, '2026-01'), false);
+  assert.equal(tallyMonthMatches(data, bill, '2026-02'), true);
+  assert.equal(tallyMonthMatches(data, bill, '2026-03'), false);
+});
+
+test('tallyMonthMatches: phase-aligns to payment history like billStatusDisplay does', () => {
+  // annual bill historically paid in July → anchored to July, counts only in July
+  const data = { payments: [{ bill_id: 'b1', period: '2025', status: 'paid', paid_date: '2025-07-14' }] };
+  const bill = { id: 'b1', frequency: 'annual' };
+  assert.equal(tallyMonthMatches(data, bill, '2026-01'), false);
+  assert.equal(tallyMonthMatches(data, bill, '2026-07'), true);
+  assert.equal(tallyMonthMatches(data, bill, '2026-12'), false);
 });
 
 // ---------- derive: getAttentionItems (non_renewing subscriptions) ----------
