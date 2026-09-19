@@ -282,6 +282,9 @@ function filtersHTML() {
       </div>
       <select class="select" id="f-type">${typeOptions}</select>
       <select class="select" id="f-status">${statusOptions}</select>
+      <label class="chip ${ui.showArchived ? 'active' : ''}" style="cursor:pointer">
+        <input type="checkbox" id="f-archived" ${ui.showArchived ? 'checked' : ''} style="display:none"> Show archived
+      </label>
       <div class="month-nav">
         <button class="icon-btn" id="m-prev" title="Previous month">‹</button>
         <div class="month-label ${monthNavClass(ui.month)}">${monthNavLabelHTML(ui.month)}</div>
@@ -509,7 +512,7 @@ function tableHTML(data) {
       ? `<div class="bill-note" data-note-bill-id="${b.id}" title="${escapeAttr(b.notes)}">${escape(b.notes)}</div>`
       : `<div class="bill-note" data-note-bill-id="${b.id}"></div>`;
 
-    return `${prefix}<tr data-bill-id="${b.id}">
+    return `${prefix}<tr data-bill-id="${b.id}" class="${b.archived ? 'archived' : ''}">
       <td class="tight" data-sort="${b.day ?? 99}"><span class="day">${b.day ?? '—'}</span></td>
       <td data-sort="${escapeAttr(b.brand + ' ' + b.name)}"><b>${escape(b.brand)}</b> — ${escape(b.name)} ${typePill}${aprBadge(b)}${dueBadge(b)}${noteLine}</td>
       <td class="tight" data-sort="${b.who || ''}">${whoDot(b.who)}</td>
@@ -629,6 +632,9 @@ function wireInteractions(data) {
   });
   document.getElementById('f-status')?.addEventListener('change', e => {
     ui.status = e.target.value; render(state.get());
+  });
+  document.getElementById('f-archived')?.addEventListener('change', e => {
+    ui.showArchived = e.target.checked; render(state.get());
   });
 
   // month nav

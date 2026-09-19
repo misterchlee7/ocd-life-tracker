@@ -165,6 +165,9 @@ function filtersHTML(data) {
       <label class="chip ${ui.showUsed ? 'active' : ''}" style="cursor:pointer">
         <input type="checkbox" id="f-used" ${ui.showUsed ? 'checked' : ''} style="display:none"> Show used
       </label>
+      <label class="chip ${ui.showArchived ? 'active' : ''}" style="cursor:pointer">
+        <input type="checkbox" id="f-archived" ${ui.showArchived ? 'checked' : ''} style="display:none"> Show archived
+      </label>
     </div>
   `;
 }
@@ -285,6 +288,9 @@ function wireInteractions(data) {
   });
   document.getElementById('f-used')?.addEventListener('change', (e) => {
     ui.showUsed = e.target.checked; render(state.get());
+  });
+  document.getElementById('f-archived')?.addEventListener('change', (e) => {
+    ui.showArchived = e.target.checked; render(state.get());
   });
   document.getElementById('btn-add')?.addEventListener('click', () => openForm());
 

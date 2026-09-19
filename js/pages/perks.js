@@ -222,6 +222,9 @@ function filtersHTML(data) {
         ${Object.entries(STATUS_LABELS).map(([k, v]) =>
           `<option value="${k}" ${ui.status === k ? 'selected' : ''}>${v}</option>`).join('')}
       </select>
+      <label class="chip ${ui.showArchived ? 'active' : ''}" style="cursor:pointer">
+        <input type="checkbox" id="f-archived" ${ui.showArchived ? 'checked' : ''} style="display:none"> Show archived
+      </label>
       <div class="month-nav">
         <button class="icon-btn" id="nav-prev" title="Previous">‹</button>
         <div class="month-label ${monthNavClass(ui.month)}">${monthNavLabelHTML(ui.month)}</div>
@@ -359,6 +362,9 @@ function wireInteractions(data) {
   });
   document.getElementById('f-status')?.addEventListener('change', (e) => {
     ui.status = e.target.value; render(state.get());
+  });
+  document.getElementById('f-archived')?.addEventListener('change', (e) => {
+    ui.showArchived = e.target.checked; render(state.get());
   });
   document.getElementById('nav-prev')?.addEventListener('click', () => {
     ui.month = shiftMonth(ui.month, -1); render(state.get());

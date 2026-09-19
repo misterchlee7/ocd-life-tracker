@@ -199,6 +199,9 @@ function filtersHTML() {
         <option value="all">All statuses</option>
         ${FILTER_STATUSES.map(s => `<option value="${s}" ${ui.status === s ? 'selected' : ''}>${STATUS_LABELS[s]}</option>`).join('')}
       </select>
+      <label class="chip ${ui.showArchived ? 'active' : ''}" style="cursor:pointer">
+        <input type="checkbox" id="f-archived" ${ui.showArchived ? 'checked' : ''} style="display:none"> Show archived
+      </label>
     </div>
   `;
 }
@@ -389,6 +392,7 @@ function wireInteractions() {
   });
   document.getElementById('f-category')?.addEventListener('change', (e) => { ui.category = e.target.value; render(state.get()); });
   document.getElementById('f-status')?.addEventListener('change', (e) => { ui.status = e.target.value; render(state.get()); });
+  document.getElementById('f-archived')?.addEventListener('change', (e) => { ui.showArchived = e.target.checked; render(state.get()); });
   document.getElementById('btn-add')?.addEventListener('click', () => openSubForm());
   document.getElementById('btn-cancelled-toggle')?.addEventListener('click', () => {
     ui.showCancelled = !ui.showCancelled; render(state.get());
