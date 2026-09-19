@@ -2,6 +2,7 @@ import { state } from '../core/state.js';
 import { bootstrap, showBottomSheet, fmtMoney, fmtMoneyShort, toast } from '../core/ui.js';
 import { todayISO, shortDate, relativeDays, daysFromToday } from '../core/dates.js';
 import { escapeHTML, VEST_STATUS_LABELS as FULL_LABELS } from '../core/text.js';
+import { computedGrossValue, netShares, netValue } from '../core/derive.js';
 
 const page = document.getElementById('page');
 
@@ -28,8 +29,8 @@ function summaryStripHTML(data) {
   const events = data.vesting;
   const upcoming = events.filter(v => v.status === 'upcoming' && v.date);
   const next90 = upcoming.filter(v => { const d = daysFromToday(v.date); return d != null && d >= 0 && d <= 90; });
-  const next90Value = next90.reduce((a, v) => a + (v.gross_value || 0), 0);
-  const totalUpcomingValue = upcoming.reduce((a, v) => a + (v.gross_value || 0), 0);
+  const next90Value = next90.reduce((a, v) => a + (computedGrossValue(v, data) || 0), 0);
+  const totalUpcomingValue = upcoming.reduce((a, v) => a + (computedGrossValue(v, data) || 0), 0);
   const currentYear = String(new Date().getFullYear());
   const soldYTD = events
     .filter(v => v.status === 'sold' && v.sold_date?.startsWith(currentYear))
@@ -108,8 +109,8 @@ function vestingCardHTML(event, data) {
           <div class="m-card-name-sub" style="font-size:12px">${dateText}</div>
         </div>
         <div style="text-align:right">
-          <div class="m-card-amount">${fmtMoney(event.gross_value)}</div>
-          ${event.shares ? `<div class="m-card-amount-sub">${event.shares} shares</div>` : ''}
+          <div class="m-card-amount">${fmtMoney(computedGrossValue(event, data))}</div>
+          ${event.shares ? `<div class="m-card-amount-sub">${event.shares} shares${event.shares_withheld ? ` · −${event.shares_withheld} tax → ${netShares(event)} net` : ''}</div>` : ''}
         </div>
       </div>
       <div class="m-card-footer">
@@ -206,6 +207,7 @@ function openSoldModal(eventId) {
   const v = data.vesting.find(x => x.id === eventId);
   if (!v) return;
 
+  const currentGross = computedGrossValue(v, data);
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop';
   backdrop.innerHTML = `
@@ -214,7 +216,7 @@ function openSoldModal(eventId) {
       <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">${v.date ? shortDate(v.date) : 'event'}</p>
       <label class="field" style="display:flex;flex-direction:column;gap:4px;margin-bottom:16px">
         <span style="font-size:12px;font-weight:600;color:var(--text-muted)">Proceeds ($)</span>
-        <input id="sold-amt" type="number" inputmode="decimal" step="0.01" value="${v.gross_value ?? ''}"
+        <input id="sold-amt" type="number" inputmode="decimal" step="0.01" value="${currentGross ?? ''}"
           style="padding:10px 12px;border:1px solid var(--border-strong);border-radius:8px;font-size:16px;font:inherit"/>
       </label>
       <div style="display:flex;gap:8px">
@@ -233,7 +235,7 @@ function openSoldModal(eventId) {
     if (!isFinite(n)) { backdrop.remove(); return; }
     state.mutate(d => {
       const e = d.vesting.find(x => x.id === eventId);
-      if (e) { e.status = 'sold'; e.sold_amount = n; e.sold_date = todayISO(); }
+      if (e) { e.status = 'sold'; e.sold_amount = n; e.sold_date = todayISO(); e.gross_value = currentGross; }
     }, `mark sold: ${v.date ? shortDate(v.date) : 'event'} $${n}`);
     backdrop.remove();
     toast(`Sold: ${v.date ? shortDate(v.date) : 'event'}`, 'success');
