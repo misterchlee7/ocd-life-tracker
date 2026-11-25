@@ -23,13 +23,40 @@ Canonical shape of `data.json` stored in the `ocd-life-tracker-data` repo. This 
   "subscriptions": [ /* Subscription */ ],
   "grants":        [ /* Grant — RSU/ESPP parent */ ],
   "vesting":       [ /* VestingEvent */ ],
-  "stock_prices":  { /* ticker → price, e.g. "CSCO": 115.46 */ },
   "backlog":       [ /* BacklogItem */ ],
   "warranties":    [ /* Warranty */ ],  // optional; accessed as data.warranties || []
   "accounts":      [ /* Account */ ],   // optional; accessed as data.accounts || []
   "history":       [ /* HistoryEntry — activity log */ ]
 }
 ```
+
+## Companion file: `stock-prices.json`
+
+Stock prices live in **their own file** in the data repo, as a flat ticker → price map:
+
+```jsonc
+// stock-prices.json
+{ "CSCO": 93.99 }
+```
+
+**Why it is not in `data.json`:** a scheduled GitHub Action (`update-stock-prices.yml` in the
+data repo) rewrites prices every weekday. While it shared `data.json` with everything else,
+every bot run invalidated the `sha` held by an open browser tab and the next Save failed with a
+409 conflict — mid-data-entry, with no way to recover the pending edits. Keeping prices in a
+sibling file means the bot and the app never write the same file, so routine bill entry can no
+longer collide with it. See [decisions.md](decisions.md).
+
+**How the app handles it:**
+- Fetched alongside `data.json` on load, with its own `sha` and its own dirty flag.
+- Merged into memory as `data.stock_prices`, so all readers (`derive.js`, `vesting.js`) are
+  unchanged. **That key is stripped before `data.json` is written** — it is never persisted there.
+- Price edits (vesting page inline edit, "+ Add ticker") go through `state.mutatePrices()` and
+  save to `stock-prices.json` only.
+- A missing `stock-prices.json` (404) is not an error: the app falls back to `stock_prices`
+  inside `data.json` if present, so old data still renders.
+
+The bot reads its ticker list from the keys of this file, so adding a ticker in the app is what
+enrolls it in the daily price fetch.
 
 ## Enums
 
@@ -187,7 +214,7 @@ One per period per perk, tracking status.
   "id": "g24r001",
   "label": "G-24-R-001",             // internal identifier (shown in Grants… modal and event form picker)
   "company": "Cisco",                // optional; issuing company — shown as "Company" column in events table
-  "ticker": "CSCO",                  // optional; stock ticker — links grant to stock_prices for auto gross value
+  "ticker": "CSCO",                  // optional; stock ticker — links grant to the price map in stock-prices.json (in memory: data.stock_prices) for auto gross value
   "broker": "E*Trade",               // optional; brokerage account — shown as "Broker" column in events table
   "type": "rsu",                     // grant_type
   "who": "chang",

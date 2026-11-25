@@ -24,9 +24,9 @@ function b64decode(str) {
   return decodeURIComponent(escape(atob(str)));
 }
 
-function contentsUrl() {
+function contentsUrl(path) {
   const { owner, repo, branch } = getCreds();
-  return `${API}/repos/${owner}/${repo}/contents/${DEFAULTS.dataPath}?ref=${encodeURIComponent(branch)}&t=${Date.now()}`;
+  return `${API}/repos/${owner}/${repo}/contents/${path}?ref=${encodeURIComponent(branch)}&t=${Date.now()}`;
 }
 
 // Turn a GitHub API failure into a message that tells the user what to DO,
@@ -42,14 +42,18 @@ function friendlyError(status, body, verb) {
     return 'Repo or file not found (404) — check owner / repo / branch in Settings (⚙).';
   }
   if (status === 409 || (status === 422 && /sha/i.test(body))) {
-    return 'Save conflict — someone else saved since you loaded this page. Hit Refresh (↻) to pull their changes, but copy any edits you don\'t want to lose first (Refresh discards them).';
+    // Deliberately does NOT tell the user to hit Refresh: Refresh used to
+    // overwrite the unsaved edits it was meant to rescue. state.save() now
+    // retries conflicts on its own, so reaching this text means the retry
+    // also failed — i.e. a genuine concurrent edit worth looking at.
+    return 'Save conflict — the file changed in GitHub while you were editing, and an automatic merge was not possible. Your edits are still here and kept safe locally; use Settings (⚙) → Download backup before doing anything else.';
   }
   return `GitHub ${verb} failed: ${status} ${body}`;
 }
 
 // Returns { data, sha } or { data: null, sha: null } if the file doesn't exist.
-export async function fetchData() {
-  const res = await fetch(contentsUrl(), { headers: headers() });
+export async function fetchFile(path) {
+  const res = await fetch(contentsUrl(path), { headers: headers() });
   if (res.status === 404) return { data: null, sha: null };
   if (!res.ok) throw new Error(friendlyError(res.status, await res.text(), 'GET'));
   const json = await res.json();
@@ -57,9 +61,12 @@ export async function fetchData() {
   return { data: JSON.parse(decoded), sha: json.sha };
 }
 
-// Writes data.json with the given sha (null if creating).
+export function fetchData()   { return fetchFile(DEFAULTS.dataPath); }
+export function fetchPrices() { return fetchFile(DEFAULTS.pricesPath); }
+
+// Writes `path` with the given sha (null if creating).
 // Returns the new sha on success.
-export async function putData(data, sha, message) {
+export async function putFile(path, data, sha, message) {
   const { branch } = getCreds();
   const body = {
     message: message || `update data.json — ${new Date().toISOString()}`,
@@ -68,14 +75,27 @@ export async function putData(data, sha, message) {
   };
   if (sha) body.sha = sha;
 
-  const res = await fetch(contentsUrl().split('?')[0], {
+  const res = await fetch(contentsUrl(path).split('?')[0], {
     method: 'PUT',
     headers: { ...headers(), 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(friendlyError(res.status, await res.text(), 'PUT'));
+  if (!res.ok) {
+    const text = await res.text();
+    const err = new Error(friendlyError(res.status, text, 'PUT'));
+    err.status = res.status;          // state.save() keys its conflict retry off this
+    err.conflict = res.status === 409 || (res.status === 422 && /sha/i.test(text));
+    throw err;
+  }
   const json = await res.json();
   return json.content.sha;
+}
+
+export function putData(data, sha, message) {
+  return putFile(DEFAULTS.dataPath, data, sha, message);
+}
+export function putPrices(prices, sha, message) {
+  return putFile(DEFAULTS.pricesPath, prices, sha, message);
 }
 
 // Quick credentials/connectivity check. Returns { ok, message }.

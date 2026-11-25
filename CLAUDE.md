@@ -15,7 +15,8 @@ Only 2 users (Chang + Kiju). Desktop-first for data entry; mobile has a dedicate
 
 - **Multi-page static site.** One HTML file per "tab" (dashboard, bills, perks, subscriptions, vesting, backlog, warranties). No framework, no build step, no bundler. Just HTML + CSS + vanilla JS modules.
 - **Single source of truth:** `data.json` in the `ocd-life-tracker-data` repo. See [docs/data-schema.md](docs/data-schema.md) for the full schema.
-- **Save model:** changes accumulate in memory (dirty flag), user clicks Save → one `PUT /contents/data.json` commit to GitHub. No autosave per keystroke. Undo/redo is in-memory only, cleared on reload. Version history = git history of the data repo. **Commit messages are built from mutation labels** — `state.mutate(fn, label)` labels accumulate since the last save and `save()` joins them (deduped, ~90 char cap, `+N more` overflow) into the commit message when no explicit message is given. This is separate from `data.history` (the persistent in-app activity log, see below) — one lives in git, one lives in the data.
+- **Stock prices live in a SECOND file**, `stock-prices.json`, in the same repo — a flat ticker → price map. A scheduled Action in the data repo rewrites it every weekday; it used to rewrite `data.json`, which meant every bot run staled the `sha` held by an open tab and the next Save died with a 409 mid-data-entry. The app fetches both files, tracks a `sha` for each, and **strips `stock_prices` from `data.json` before writing it** (`dataForSave()` in state.js). Prices are still exposed in memory as `data.stock_prices`, so `derive.js` / `vesting.js` read them exactly as before; only writes differ — they go through `state.mutatePrices()`.
+- **Save model:** changes accumulate in memory (dirty flag), user clicks Save → a `PUT /contents/data.json` commit to GitHub (plus a separate `PUT /contents/stock-prices.json` only when a price was edited by hand). No autosave per keystroke. Undo/redo is in-memory only, cleared on reload. Version history = git history of the data repo. **Commit messages are built from mutation labels** — `state.mutate(fn, label)` labels accumulate since the last save and `save()` joins them (deduped, ~90 char cap, `+N more` overflow) into the commit message when no explicit message is given. This is separate from `data.history` (the persistent in-app activity log, see below) — one lives in git, one lives in the data.
 - **Auth:** user pastes a fine-grained PAT (scoped to `ocd-life-tracker-data` repo, contents: read/write) into a settings modal on first load. Stored in `localStorage` under `otl.pat`.
 - **Demo/guest mode:** first-time visitors (no creds in localStorage) see a landing screen with Login vs Try Demo. Demo mode loads hardcoded sample data entirely in memory — nothing is ever written to localStorage or GitHub. See [Demo mode](#demo--guest-mode) section below.
 
@@ -262,8 +263,10 @@ Loaded on all pages via `<link>`. Sections:
 | `otl.owner` | GitHub username (repo owner) | Settings modal |
 | `otl.repo` | Data repo name | Settings modal |
 | `otl.branch` | Branch name (default: `main`) | Settings modal |
-| `otl.cache` | JSON string of last-fetched data.json | state.cacheWrite() |
-| `otl.sha` | SHA of last-fetched data.json | state.cacheWrite() |
+| `otl.cache` | JSON string of last-fetched data.json | state.cacheWriteClean() |
+| `otl.sha` | SHA of last-fetched data.json | state.cacheWriteClean() |
+| `otl.prices` | JSON string of last-fetched stock-prices.json | state.cacheWriteClean() |
+| `otl.prices_sha` | SHA of last-fetched stock-prices.json | state.cacheWriteClean() |
 | `otl.tab_order` | JSON array of `href` strings | Tab drag-to-reorder |
 | `otl.theme` | `light` or `dark` (absent = follow OS) | Topbar theme toggle |
 | `otl.demo` | **sessionStorage** (not localStorage): `1` while in demo mode | `startDemo()` in ui.js; cleared by `state.exitGuestMode()` |

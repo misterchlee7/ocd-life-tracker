@@ -1,8 +1,16 @@
 // Single source of truth for the loaded data.json in memory.
 // Pages import { state } and subscribe with state.subscribe(fn).
+//
+// TWO FILES, not one. data.json holds everything the user edits; stock-prices.json
+// holds the ticker -> price map that the scheduled bot in the data repo rewrites
+// every weekday. They used to share data.json, which meant every bot run invalidated
+// the sha held by an open tab and the next Save died with a 409 mid-data-entry.
+// Prices are merged into memory as `data.stock_prices` so every reader
+// (derive.js, vesting.js) is unchanged, but that key is STRIPPED before data.json
+// is written — see dataForSave().
 
-import { STORAGE_KEYS, emptyData, hasCreds } from './config.js';
-import { fetchData, putData } from './github.js';
+import { STORAGE_KEYS, emptyData, emptyPrices, hasCreds } from './config.js';
+import { fetchData, putData, fetchPrices, putPrices } from './github.js';
 
 const listeners = new Set();
 const undoStack = [];
@@ -36,6 +44,20 @@ let _loading = false;
 let _error = null;
 let _guest = false; // true while in demo/guest mode
 
+let _prices = null;
+let _pricesSha = null;
+// JSON of the prices as last fetched/saved. Price dirtiness is DERIVED from this
+// rather than kept as a flag, so undoing a price edit back to its original value
+// correctly reports "nothing to save" instead of PUTting an identical file.
+let _pricesClean = '{}';
+// JSON of data.json (price key stripped) as last fetched/saved. Used only by
+// saveData()'s identical-content conflict retry.
+let _dataClean = null;
+
+function pricesChanged() {
+  return JSON.stringify(_prices || {}) !== _pricesClean;
+}
+
 function notify() {
   for (const fn of listeners) {
     try { fn(snapshot()); } catch (e) { console.error(e); }
@@ -43,22 +65,54 @@ function notify() {
 }
 
 function snapshot() {
-  return { data: _data, sha: _sha, dirty: _dirty, loading: _loading, error: _error, guest: _guest };
+  return {
+    data: _data,
+    sha: _sha,
+    // `dirty` means "something, in either file, needs saving" — the Save button
+    // and the nav guard both key off it.
+    dirty: _dirty || pricesChanged(),
+    loading: _loading,
+    error: _error,
+    guest: _guest,
+    prices: _prices,
+  };
 }
 
-function cacheWrite() {
+// Prices live in their own file but are exposed on data.stock_prices so that
+// derive.js / vesting.js / the tests need no knowledge of the split.
+function applyPrices() {
+  if (_data) _data.stock_prices = _prices || {};
+}
+
+// data.json as it should be PERSISTED: without the price map, which belongs to
+// stock-prices.json. Shallow copy is enough — only a top-level key is removed.
+function dataForSave() {
+  const out = { ..._data };
+  delete out.stock_prices;
+  return out;
+}
+
+function cacheWriteClean() {
   if (_guest) return; // NEVER write demo data to localStorage
   try {
-    localStorage.setItem(STORAGE_KEYS.cache, JSON.stringify(_data));
+    localStorage.setItem(STORAGE_KEYS.cache, JSON.stringify(dataForSave()));
     if (_sha) localStorage.setItem(STORAGE_KEYS.sha, _sha);
+    localStorage.setItem(STORAGE_KEYS.prices, JSON.stringify(_prices || {}));
+    if (_pricesSha) localStorage.setItem(STORAGE_KEYS.pricesSha, _pricesSha);
   } catch (e) { console.warn('cache write failed', e); }
 }
 
 function cacheRead() {
   const raw = localStorage.getItem(STORAGE_KEYS.cache);
-  const sha = localStorage.getItem(STORAGE_KEYS.sha);
   if (!raw) return null;
-  try { return { data: JSON.parse(raw), sha }; } catch { return null; }
+  try {
+    return {
+      data: JSON.parse(raw),
+      sha: localStorage.getItem(STORAGE_KEYS.sha),
+      prices: JSON.parse(localStorage.getItem(STORAGE_KEYS.prices) || '{}'),
+      pricesSha: localStorage.getItem(STORAGE_KEYS.pricesSha),
+    };
+  } catch { return null; }
 }
 
 export const state = {
@@ -76,6 +130,11 @@ export const state = {
     if (cached && cached.data) {
       _data = cached.data;
       _sha = cached.sha;
+      _prices = cached.prices || {};
+      _pricesSha = cached.pricesSha;
+      _pricesClean = JSON.stringify(_prices);
+      applyPrices();
+      _dataClean = JSON.stringify(dataForSave());
       notify();
     }
 
@@ -90,18 +149,33 @@ export const state = {
   async refresh() {
     _loading = true; _error = null; notify();
     try {
-      const { data, sha } = await fetchData();
-      if (data === null) {
+      const [d, p] = await Promise.all([fetchData(), fetchPrices()]);
+
+      if (d.data === null) {
         // file doesn't exist yet in the data repo — bootstrap with empty
         _data = emptyData();
         _sha = null;  // null sha means "create on first save"
       } else {
-        _data = data;
-        _sha = sha;
+        _data = d.data;
+        _sha = d.sha;
       }
+
+      if (p.data === null) {
+        // stock-prices.json not created yet: fall back to the legacy key inside
+        // data.json so existing data still renders. Null sha => create on save.
+        _prices = (d.data && d.data.stock_prices) ? { ...d.data.stock_prices } : emptyPrices();
+        _pricesSha = null;
+      } else {
+        _prices = p.data;
+        _pricesSha = p.sha;
+      }
+      _pricesClean = JSON.stringify(_prices);
+      applyPrices();
+      _dataClean = JSON.stringify(dataForSave());
+
       _dirty = false;
       _labels = [];
-      cacheWrite();
+      cacheWriteClean();
     } catch (e) {
       _error = e.message;
       console.error(e);
@@ -115,7 +189,11 @@ export const state = {
   // Mutations are done in-place on a structured clone so we can snapshot for undo.
   mutate(fn, label) {
     if (!_data) throw new Error('state not loaded');
-    undoStack.push({ label: label || 'edit', snapshot: structuredClone(_data) });
+    undoStack.push({
+      label: label || 'edit',
+      snapshot: structuredClone(_data),
+      prices: structuredClone(_prices || {}),
+    });
     if (undoStack.length > MAX_UNDO) undoStack.shift();
     _labels.push(label || 'edit');
     fn(_data);
@@ -125,7 +203,32 @@ export const state = {
       _data.history.push({ ts: _data.updated_at, label: label || 'edit' });
       if (_data.history.length > 500) _data.history.splice(0, _data.history.length - 500);
       _dirty = true;
-      cacheWrite(); // cacheWrite also guards on _guest, but belt-and-suspenders
+      cacheWriteClean();
+    }
+    notify();
+  },
+
+  // Edit the price map. Goes to stock-prices.json, NOT data.json. The history
+  // entry still lands in data.json, per the "every mutation is logged" rule.
+  mutatePrices(fn, label) {
+    if (!_data) throw new Error('state not loaded');
+    if (!_prices) _prices = emptyPrices();
+    undoStack.push({
+      label: label || 'edit price',
+      snapshot: structuredClone(_data),
+      prices: structuredClone(_prices),
+    });
+    if (undoStack.length > MAX_UNDO) undoStack.shift();
+    _labels.push(label || 'edit price');
+    fn(_prices);
+    applyPrices();
+    if (!_guest) {
+      _data.updated_at = new Date().toISOString();
+      if (!_data.history) _data.history = [];
+      _data.history.push({ ts: _data.updated_at, label: label || 'edit price' });
+      if (_data.history.length > 500) _data.history.splice(0, _data.history.length - 500);
+      _dirty = true; // the history entry itself dirties data.json
+      cacheWriteClean();
     }
     notify();
   },
@@ -134,9 +237,11 @@ export const state = {
     const last = undoStack.pop();
     if (!last) return null;
     _data = last.snapshot; // snapshot pre-dates this mutation's history.push, so data.history reverts too
+    if (last.prices) _prices = last.prices;
+    applyPrices();
     if (_labels.length) _labels.pop(); // the undone mutation no longer belongs in the commit message
     _dirty = true;
-    cacheWrite();
+    cacheWriteClean();
     notify();
     return last.label; // return label so UI can show what was undone
   },
@@ -148,6 +253,11 @@ export const state = {
     _guest = true;
     _data = structuredClone(data); // defensive clone so demo-data.js object stays pristine
     _sha = null;
+    _prices = structuredClone(data.stock_prices || {});
+    _pricesSha = null;
+    _pricesClean = JSON.stringify(_prices);
+    applyPrices();
+    _dataClean = null;
     _dirty = false;
     _loading = false;
     _error = null;
@@ -162,6 +272,10 @@ export const state = {
     _guest = false;
     _data = null;
     _sha = null;
+    _prices = null;
+    _pricesSha = null;
+    _pricesClean = '{}';
+    _dataClean = null;
     _dirty = false;
     _loading = false;
     _error = null;
@@ -172,6 +286,8 @@ export const state = {
     try {
       localStorage.removeItem(STORAGE_KEYS.cache);
       localStorage.removeItem(STORAGE_KEYS.sha);
+      localStorage.removeItem(STORAGE_KEYS.prices);
+      localStorage.removeItem(STORAGE_KEYS.pricesSha);
       sessionStorage.removeItem(STORAGE_KEYS.demo); // demo flag — stop auto-entering demo on nav
     } catch (e) {}
     await this.refresh(); // fetch fresh production data from GitHub
@@ -179,15 +295,28 @@ export const state = {
 
   async save(message) {
     if (_guest) return { ok: true, noop: true }; // hard block — demo mode cannot save
-    if (!_dirty) return { ok: true, noop: true };
+    if (!_dirty && !pricesChanged()) return { ok: true, noop: true };
     _loading = true; _error = null; notify();
     try {
-      const newSha = await putData(_data, _sha, message || commitMessage());
-      _sha = newSha;
-      _dirty = false;
+      const msg = message || commitMessage();
+
+      // Prices first, and merged per-ticker on conflict: if the bot wrote a new
+      // price while the user was editing another ticker, both survive.
+      if (pricesChanged()) {
+        _pricesSha = await savePrices(msg);
+        _pricesClean = JSON.stringify(_prices || {});
+      }
+
+      if (_dirty) {
+        const payload = dataForSave();
+        _sha = await saveData(payload, msg);
+        _dataClean = JSON.stringify(payload);
+        _dirty = false;
+      }
+
       undoStack.length = 0;
       _labels = [];
-      cacheWrite();
+      cacheWriteClean();
       return { ok: true };
     } catch (e) {
       _error = e.message;
@@ -198,6 +327,48 @@ export const state = {
     }
   },
 };
+
+// Write stock-prices.json, merging on conflict. Per-ticker merge is unambiguous:
+// start from whatever is on the server now, then re-apply the tickers this
+// session actually changed.
+async function savePrices(message) {
+  try {
+    return await putPrices(_prices, _pricesSha, message);
+  } catch (e) {
+    if (!e.conflict) throw e;
+    const base = JSON.parse(_pricesClean);
+    const remote = await fetchPrices();
+    const merged = { ...(remote.data || {}) };
+    for (const [ticker, price] of Object.entries(_prices || {})) {
+      if (base[ticker] !== price) merged[ticker] = price; // ours changed — ours wins
+    }
+    for (const ticker of Object.keys(base)) {
+      if (!(ticker in (_prices || {}))) delete merged[ticker]; // we removed it
+    }
+    _prices = merged;
+    applyPrices();
+    return await putPrices(_prices, remote.sha, message);
+  }
+}
+
+// Write data.json. Retries ONLY the provably safe conflict: the sha moved but
+// the content is byte-identical to what we started from (empty commit, force
+// push, a no-op write from another tab). A real concurrent edit is NOT merged
+// behind the user's back — it surfaces as an error, with the draft kept.
+async function saveData(payload, message) {
+  try {
+    return await putData(payload, _sha, message);
+  } catch (e) {
+    if (!e.conflict) throw e;
+    const remote = await fetchData();
+    const remoteClean = { ...(remote.data || {}) };
+    delete remoteClean.stock_prices;
+    if (_dataClean !== null && JSON.stringify(remoteClean) === _dataClean) {
+      return await putData(payload, remote.sha, message);
+    }
+    throw e;
+  }
+}
 
 // Convenience: short unique id
 export function uid() {

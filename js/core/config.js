@@ -7,6 +7,10 @@ export const STORAGE_KEYS = {
   branch: 'otl.branch',
   cache: 'otl.cache',     // cached data.json contents
   sha: 'otl.sha',         // sha of the cached contents
+  prices: 'otl.prices',   // cached stock-prices.json contents
+  pricesSha: 'otl.prices_sha',
+  draft: 'otl.draft',     // unsaved edits preserved across a refresh/reload
+                          // { data, baseSha, ts, labels } — see state.js
   demo: 'otl.demo',       // sessionStorage ONLY — '1' while in demo mode, so tab
                           // navigation re-enters demo instead of re-showing the
                           // landing screen. Never stored in localStorage.
@@ -15,6 +19,10 @@ export const STORAGE_KEYS = {
 export const DEFAULTS = {
   branch: 'main',
   dataPath: 'data.json',
+  // Stock prices live in their OWN file so the scheduled price bot in the data
+  // repo never writes data.json — a shared file meant every bot run staled an
+  // open tab's sha and the next Save died with a 409. See docs/data-schema.md.
+  pricesPath: 'stock-prices.json',
 };
 
 // Shape of a brand-new data.json when the file doesn't exist in the data repo yet.
@@ -39,7 +47,6 @@ export function emptyData() {
     subscriptions: [],
     grants: [],
     vesting: [],
-    stock_prices: {},
     backlog: [],
     history: [],
   };
@@ -59,6 +66,11 @@ export function setCreds({ pat, owner, repo, branch }) {
   if (owner != null) localStorage.setItem(STORAGE_KEYS.owner, owner);
   if (repo != null) localStorage.setItem(STORAGE_KEYS.repo, repo);
   if (branch != null) localStorage.setItem(STORAGE_KEYS.branch, branch);
+}
+
+// Shape of a brand-new stock-prices.json: a flat ticker -> price map.
+export function emptyPrices() {
+  return {};
 }
 
 export function hasCreds() {

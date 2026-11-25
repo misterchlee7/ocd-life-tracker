@@ -579,10 +579,9 @@ function wireInteractions(data) {
       const ticker = el.dataset.priceTicker;
       const current = (state.get().data?.stock_prices || {})[ticker] || 0;
       inlineNumber(el, current, val => {
-        state.mutate(d => {
-          if (!d.stock_prices) d.stock_prices = {};
-          d.stock_prices[ticker] = val;
-        }, `update ${ticker} price`);
+        // Prices live in stock-prices.json, not data.json — mutatePrices routes
+        // the write there so the price bot can never conflict with bill entry.
+        state.mutatePrices(p => { p[ticker] = val; }, `update ${ticker} price`);
       });
     });
   });
@@ -595,10 +594,9 @@ function wireInteractions(data) {
     if (priceStr == null) return;
     const price = Number(priceStr);
     if (!isFinite(price) || price <= 0) { alert('Invalid price'); return; }
-    state.mutate(d => {
-      if (!d.stock_prices) d.stock_prices = {};
-      d.stock_prices[ticker] = price;
-    }, `add ${ticker} price`);
+    // Adding a ticker here is also what enrolls it in the bot's daily fetch:
+    // the bot reads its ticker list from the keys of stock-prices.json.
+    state.mutatePrices(p => { p[ticker] = price; }, `add ${ticker} price`);
   });
 
   // Move open menu to body with position:fixed — avoids overflow-parent clipping
