@@ -352,7 +352,7 @@ async function onRefresh() {
   if (dirty) {
     confirmModal({
       title: 'Discard unsaved changes?',
-      message: 'Refreshing pulls the latest data.json from GitHub and discards your unsaved changes.',
+      message: 'Refreshing pulls the latest data from GitHub. Your unsaved changes are dropped from the screen, but a copy is kept — you will be offered them again on the next page load, and Settings (⚙) → Download backup saves them to a file right now.',
       confirmLabel: 'Discard & refresh',
       danger: true,
       onConfirm: async () => {
@@ -407,6 +407,14 @@ export function openSettingsModal(opts = {}) {
         <small>Contents: Read & write on the data repo only.</small>
       </label>
 
+      <div class="settings-backup">
+        <span>Backup</span>
+        <button class="btn" id="s-export">Download backup</button>
+        <button class="btn" id="s-import">Restore from file…</button>
+        <input id="s-import-file" type="file" accept="application/json,.json" hidden />
+        <small>A backup is one JSON file holding data.json plus stock prices. Restoring loads it as unsaved changes — nothing reaches GitHub until you press Save.</small>
+      </div>
+
       <div id="s-status" class="modal-status"></div>
 
       <div class="modal-actions">
@@ -420,6 +428,37 @@ export function openSettingsModal(opts = {}) {
   document.body.appendChild(el);
 
   el.querySelector('#s-cancel').onclick = () => el.remove();
+
+  el.querySelector('#s-export').onclick = () => {
+    if (!state.get().data) { setStatus('✗ nothing loaded to back up', 'err'); return; }
+    downloadBackup();
+  };
+  const fileInput = el.querySelector('#s-import-file');
+  el.querySelector('#s-import').onclick = () => fileInput.click();
+  fileInput.onchange = async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    try {
+      const bundle = JSON.parse(await file.text());
+      const counts = bundle.data?.bills ? bundle.data : bundle;
+      confirmModal({
+        title: 'Restore from backup?',
+        message: `This replaces everything currently on screen with the contents of ${file.name} (${(counts.bills || []).length} bills, ${(counts.payments || []).length} payment records). It is loaded as unsaved changes — nothing is written to GitHub until you press Save.`,
+        confirmLabel: 'Load it',
+        onConfirm: () => {
+          try {
+            state.importBundle(bundle);
+            el.remove();
+            toast('backup loaded — review it, then press Save', 'success');
+          } catch (err) { toast('restore failed: ' + err.message, 'error'); }
+        },
+      });
+    } catch (err) {
+      setStatus('✗ could not read that file: ' + err.message, 'err');
+    } finally {
+      fileInput.value = '';
+    }
+  };
   el.querySelector('#s-test').onclick = async () => {
     persistInputs();
     setStatus('testing…');
@@ -476,7 +515,83 @@ export async function bootstrap() {
     return false;
   }
   await state.init();
+  // A reload no longer destroys unsaved work: mutate() parks it in otl.draft and
+  // refresh() never touches that slot. Ask before reapplying it — silently
+  // restoring a stale draft over newer server data would be a worse bug than
+  // the one this fixes.
+  if (state.hasDraft()) offerDraftRestore();
   return true;
+}
+
+function offerDraftRestore() {
+  const info = state.draftInfo();
+  if (!info) return;
+  const when = relativeTime(info.ts);
+  const list = info.labels.slice(-6).map(l => `<li>${escapeHTML(l)}</li>`).join('');
+  const more = info.count > 6 ? `<p class="modal-sub">…and ${info.count - 6} more.</p>` : '';
+  const warn = info.stale
+    ? '<p class="modal-status err">Heads up: the data repo also changed since these edits were made. Restoring is still safe — the save will merge or tell you if it cannot.</p>'
+    : '';
+
+  const el = document.createElement('div');
+  el.className = 'modal-backdrop';
+  el.innerHTML = `
+    <div class="modal">
+      <h2>Unsaved changes found</h2>
+      <p class="modal-sub">${info.count} change${info.count === 1 ? '' : 's'} from ${escapeHTML(when)} were never saved to GitHub.</p>
+      <ul class="draft-list">${list}</ul>
+      ${more}
+      ${warn}
+      <div class="modal-actions">
+        <button class="btn" id="d-download">Download as backup</button>
+        <span style="flex:1"></span>
+        <button class="btn" id="d-discard">Discard</button>
+        <button class="btn primary" id="d-restore">Restore them</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(el);
+  closeOnEscape(el);
+
+  el.querySelector('#d-download').onclick = () => downloadBackup();
+  el.querySelector('#d-restore').onclick = () => {
+    el.remove();
+    if (state.restoreDraft()) toast(`restored ${info.count} unsaved change${info.count === 1 ? '' : 's'} — press Save`, 'success');
+  };
+  el.querySelector('#d-discard').onclick = () => {
+    confirmModal({
+      title: 'Discard unsaved changes?',
+      message: `${info.count} change${info.count === 1 ? '' : 's'} will be thrown away permanently. Download the backup first if you are not sure.`,
+      confirmLabel: 'Discard',
+      danger: true,
+      onConfirm: () => { state.discardDraft(); el.remove(); toast('discarded', 'info'); },
+    });
+  };
+}
+
+// Download the whole data bundle (data.json + stock prices) as one file.
+export function downloadBackup() {
+  const bundle = state.exportBundle();
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `otl-backup-${stamp}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('backup downloaded', 'success');
+}
+
+function relativeTime(iso) {
+  const then = new Date(iso).getTime();
+  if (!isFinite(then)) return 'earlier';
+  const mins = Math.round((Date.now() - then) / 60000);
+  if (mins < 1) return 'moments ago';
+  if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? '' : 's'} ago`;
+  const days = Math.round(hrs / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
 // Enter demo mode: swap display names, flag the session so other tabs skip the

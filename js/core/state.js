@@ -8,6 +8,15 @@
 // Prices are merged into memory as `data.stock_prices` so every reader
 // (derive.js, vesting.js) is unchanged, but that key is STRIPPED before data.json
 // is written — see dataForSave().
+//
+// THREE localStorage slots, with distinct jobs:
+//   otl.cache / otl.sha  — last known CLEAN server state. Written only by
+//                          refresh() and a successful save().
+//   otl.prices / otl.prices_sha — same, for stock-prices.json.
+//   otl.draft            — UNSAVED edits. Written by every mutate(). Never
+//                          touched by refresh(), so reloading the page can no
+//                          longer destroy work in progress (it used to: refresh()
+//                          overwrote the cache that held the only copy).
 
 import { STORAGE_KEYS, emptyData, emptyPrices, hasCreds } from './config.js';
 import { fetchData, putData, fetchPrices, putPrices } from './github.js';
@@ -115,6 +124,37 @@ function cacheRead() {
   } catch { return null; }
 }
 
+// --- draft (unsaved edits) -------------------------------------------------
+// The whole point: survive a reload. Keyed to the sha it was based on so the
+// restore prompt can tell the user whether the server has moved on since.
+
+function draftWrite() {
+  if (_guest) return;
+  try {
+    localStorage.setItem(STORAGE_KEYS.draft, JSON.stringify({
+      data: dataForSave(),
+      prices: _prices || {},
+      baseSha: _sha,
+      basePricesSha: _pricesSha,
+      ts: new Date().toISOString(),
+      labels: [..._labels],
+    }));
+  } catch (e) { console.warn('draft write failed', e); }
+}
+
+function draftClear() {
+  try { localStorage.removeItem(STORAGE_KEYS.draft); } catch (e) {}
+}
+
+function draftRead() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.draft);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    return (d && d.data) ? d : null;
+  } catch { return null; }
+}
+
 export const state = {
   subscribe(fn) {
     listeners.add(fn);
@@ -125,6 +165,8 @@ export const state = {
   get() { return snapshot(); },
 
   // Load from cache first (instant), then refresh from GitHub in the background.
+  // Does NOT auto-apply a pending draft — ui.js asks the user first, via
+  // hasDraft() / draftInfo() / restoreDraft() / discardDraft().
   async init() {
     const cached = cacheRead();
     if (cached && cached.data) {
@@ -176,6 +218,8 @@ export const state = {
       _dirty = false;
       _labels = [];
       cacheWriteClean();
+      // NOTE: deliberately does not touch the draft. A reload must not be able
+      // to destroy unsaved edits.
     } catch (e) {
       _error = e.message;
       console.error(e);
@@ -203,7 +247,7 @@ export const state = {
       _data.history.push({ ts: _data.updated_at, label: label || 'edit' });
       if (_data.history.length > 500) _data.history.splice(0, _data.history.length - 500);
       _dirty = true;
-      cacheWriteClean();
+      draftWrite();
     }
     notify();
   },
@@ -228,7 +272,7 @@ export const state = {
       _data.history.push({ ts: _data.updated_at, label: label || 'edit price' });
       if (_data.history.length > 500) _data.history.splice(0, _data.history.length - 500);
       _dirty = true; // the history entry itself dirties data.json
-      cacheWriteClean();
+      draftWrite();
     }
     notify();
   },
@@ -241,12 +285,73 @@ export const state = {
     applyPrices();
     if (_labels.length) _labels.pop(); // the undone mutation no longer belongs in the commit message
     _dirty = true;
-    cacheWriteClean();
+    draftWrite();
     notify();
     return last.label; // return label so UI can show what was undone
   },
 
   canUndo() { return undoStack.length > 0; },
+
+  // --- draft API (used by ui.js bootstrap) --------------------------------
+
+  hasDraft() { return !_guest && !!draftRead(); },
+
+  // { ts, labels, count, stale } — `stale` means the server moved on since the
+  // draft was taken, so restoring it will need a conflict-aware save.
+  draftInfo() {
+    const d = draftRead();
+    if (!d) return null;
+    return {
+      ts: d.ts,
+      labels: d.labels || [],
+      count: (d.labels || []).length,
+      stale: !!(_sha && d.baseSha && d.baseSha !== _sha),
+    };
+  },
+
+  restoreDraft() {
+    const d = draftRead();
+    if (!d || _guest) return false;
+    _data = d.data;
+    _prices = d.prices || {};
+    applyPrices();
+    _labels = d.labels || [];
+    _dirty = true;
+    undoStack.length = 0; // the pre-draft snapshots are gone with the old page
+    notify();
+    return true;
+  },
+
+  discardDraft() {
+    draftClear();
+    notify();
+  },
+
+  // Everything needed to reconstruct the data repo, for Settings -> Download backup.
+  exportBundle() {
+    return {
+      exported_at: new Date().toISOString(),
+      data: dataForSave(),
+      stock_prices: _prices || {},
+    };
+  },
+
+  // Load a previously exported bundle (or a bare data.json) into memory as
+  // unsaved edits. Never writes to GitHub by itself — the user still presses Save.
+  importBundle(bundle) {
+    if (!bundle || typeof bundle !== 'object') throw new Error('not a JSON object');
+    const incoming = bundle.data && bundle.data.bills ? bundle.data : bundle;
+    if (!Array.isArray(incoming.bills)) throw new Error('no bills array — is this an export from this app?');
+    _data = structuredClone(incoming);
+    if (bundle.stock_prices) _prices = structuredClone(bundle.stock_prices);
+    else if (incoming.stock_prices) _prices = structuredClone(incoming.stock_prices);
+    applyPrices();
+    _dirty = true;
+    _labels = ['import backup'];
+    undoStack.length = 0;
+    if (!_guest) draftWrite();
+    notify();
+  },
 
   // Load hardcoded demo data into memory. Nothing is written to localStorage or GitHub.
   enterGuestMode(data) {
@@ -263,7 +368,7 @@ export const state = {
     _error = null;
     undoStack.length = 0;
     _labels = [];
-    // intentionally no cacheWrite — demo data must never touch localStorage
+    // intentionally no cache or draft write — demo data must never touch localStorage
     notify();
   },
 
@@ -288,6 +393,7 @@ export const state = {
       localStorage.removeItem(STORAGE_KEYS.sha);
       localStorage.removeItem(STORAGE_KEYS.prices);
       localStorage.removeItem(STORAGE_KEYS.pricesSha);
+      localStorage.removeItem(STORAGE_KEYS.draft);
       sessionStorage.removeItem(STORAGE_KEYS.demo); // demo flag — stop auto-entering demo on nav
     } catch (e) {}
     await this.refresh(); // fetch fresh production data from GitHub
@@ -317,9 +423,11 @@ export const state = {
       undoStack.length = 0;
       _labels = [];
       cacheWriteClean();
+      draftClear(); // saved — the draft has done its job
       return { ok: true };
     } catch (e) {
       _error = e.message;
+      draftWrite(); // keep the edits recoverable across a reload
       return { ok: false, error: e.message };
     } finally {
       _loading = false;

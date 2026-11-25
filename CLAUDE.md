@@ -76,7 +76,8 @@ Only 2 users (Chang + Kiju). Desktop-first for data entry; mobile has a dedicate
 │   └── decisions.md        # UX decisions + why (payment-confirm flow, rotation, etc.)
 │
 ├── tests/
-│   └── dates.test.js       # node --test suite for dates.js + derive.js pure logic
+│   ├── dates.test.js       # node --test suite for dates.js + derive.js pure logic
+│   └── state.test.js       # two-file save model + unsaved-edits draft (stubs localStorage/fetch)
 ├── package.json            # "type": "module" + `npm test` script — NO dependencies, still no build step
 │
 ├── manifest.json           # PWA manifest (standalone, Add to Home Screen)
@@ -263,15 +264,18 @@ Loaded on all pages via `<link>`. Sections:
 | `otl.owner` | GitHub username (repo owner) | Settings modal |
 | `otl.repo` | Data repo name | Settings modal |
 | `otl.branch` | Branch name (default: `main`) | Settings modal |
-| `otl.cache` | JSON string of last-fetched data.json | state.cacheWriteClean() |
+| `otl.cache` | JSON string of last-fetched data.json (**clean** server state only) | state.cacheWriteClean() |
 | `otl.sha` | SHA of last-fetched data.json | state.cacheWriteClean() |
 | `otl.prices` | JSON string of last-fetched stock-prices.json | state.cacheWriteClean() |
 | `otl.prices_sha` | SHA of last-fetched stock-prices.json | state.cacheWriteClean() |
+| `otl.draft` | **Unsaved** edits: `{ data, prices, baseSha, ts, labels }` | state.mutate() / mutatePrices() |
 | `otl.tab_order` | JSON array of `href` strings | Tab drag-to-reorder |
 | `otl.theme` | `light` or `dark` (absent = follow OS) | Topbar theme toggle |
 | `otl.demo` | **sessionStorage** (not localStorage): `1` while in demo mode | `startDemo()` in ui.js; cleared by `state.exitGuestMode()` |
 
-Note: `otl.cache` and `otl.sha` are explicitly purged by `state.exitGuestMode()` to prevent any stale or demo data from persisting after login.
+Note: all five are explicitly purged by `state.exitGuestMode()` to prevent any stale or demo data from persisting after login.
+
+**`otl.cache` vs `otl.draft` — do not conflate them.** `otl.cache` holds the last known *clean* server state and is written only by `refresh()` and a successful `save()`. `otl.draft` holds *unsaved* edits and is written by every mutation. `refresh()` must **never** touch `otl.draft`: it used to overwrite the cache that held the only copy of pending edits, so reloading the page silently destroyed work in progress. On load, `bootstrap()` calls `state.hasDraft()` and offers Restore / Discard / Download — it never reapplies a draft silently.
 
 ## Activity history log
 
@@ -297,7 +301,7 @@ Every `state.mutate()` call appends `{ ts, label }` to `data.history` (rolling c
 
 ## Tests
 
-`npm test` runs `node --test tests/*.test.js` — zero dependencies, no build. Covers the pure logic in `dates.js` (periodFor, nextOccurrence day-clamping/phase/leap-year, daysBetween) and `derive.js` (yearProgress, statusForRow, cadenceAnchorMonth). The root `package.json` exists only for `"type": "module"` + the test script; the site remains a build-free static deploy.
+`npm test` runs `node --test tests/*.test.js` — zero dependencies, no build. Covers the pure logic in `dates.js` (periodFor, nextOccurrence day-clamping/phase/leap-year, daysBetween) and `derive.js` (yearProgress, statusForRow, cadenceAnchorMonth), plus `tests/state.test.js` — the two-file save model (prices stripped from data.json, per-ticker price merge on conflict, identical-content retry, real conflicts failing loudly) and the draft (survives refresh, restores, clears on save, never written in guest mode). `state.test.js` stubs `localStorage` and `fetch` before importing state.js. The root `package.json` exists only for `"type": "module"` + the test script; the site remains a build-free static deploy.
 
 ## Status
 
